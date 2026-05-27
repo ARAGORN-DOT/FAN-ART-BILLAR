@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billar Francés</title>
+    <title>FAN ART Billar</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -337,7 +337,10 @@
     <!-- ══ 1. LOBBY ══ -->
     <div class="overlay" id="lobby-overlay">
         <div class="modal-card">
-            <div class="modal-title">🎱 Billar Francés</div>
+            <div class="modal-title" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+                <img src="logo.svg" style="width:72px;height:72px;object-fit:contain">
+                FAN ART Billar
+            </div>
 
             <div style="width:100%;display:flex;flex-direction:column;gap:8px">
                 <input class="lb-input" id="lb-name" placeholder="Tu nombre" maxlength="20" />
@@ -384,7 +387,7 @@
     <!-- ══ 3. SETUP ══ -->
     <div class="overlay hidden" id="setup-overlay">
         <div class="modal-card">
-            <div class="modal-title" id="setup-title">Billar Francés</div>
+            <div class="modal-title" id="setup-title">FAN ART Billar</div>
 
             <!-- P1 online: chooses target score + mode -->
             <div id="setup-p1" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%">
@@ -579,6 +582,10 @@ const gs = {
     currentPlayer: 1,
     scores: { 1: 0, 2: 0 }
 };
+
+// Logo preload for canvas center watermark
+const logoImg = new Image();
+logoImg.src = 'logo.svg';
 let pendingScoreEval = false;
 let hasStartedMoving  = false;
 let hitA = false, hitB = false;
@@ -943,6 +950,15 @@ function drawTableFrame(ctx) {
     fg.addColorStop(1,   '#165c34');
     ctx.fillStyle = fg;
     ctx.fillRect(FW, FW, 800-FW*2, 400-FW*2);
+
+    // Logo centrado en la mesa (marca de agua al 50% opacidad)
+    if (logoImg.complete && logoImg.naturalWidth > 0) {
+        const lSize = 110;
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(logoImg, 400 - lSize/2, 200 - lSize/2, lSize, lSize);
+        ctx.restore();
+    }
 
     // Textura sutil del paño
     ctx.save();
@@ -1336,7 +1352,7 @@ function showSetupLocal() {
     document.getElementById('setup-p1').style.display    = 'none';
     document.getElementById('setup-p2').style.display    = 'none';
     document.getElementById('setup-waiting').style.display = 'none';
-    document.getElementById('setup-title').textContent   = 'Billar Francés';
+    document.getElementById('setup-title').textContent   = 'FAN ART Billar';
     showOverlay('setup-overlay');
 }
 
