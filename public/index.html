@@ -511,20 +511,13 @@ let hitA = false, hitB = false;
 // ══ Spin state ════════════════════════════════════════════════════════════
 let spinX = 0, spinY = 0;
 
-// ══ Billiards rolling physics ══════════════════════════════════════════════
-// Each ball carries a "rolling velocity" (rx, ry): what the spin contributes
-// at the contact point with the table.  Slip = velocity − rolling_velocity.
-// Positive slip → sliding friction decelerates linearly AND drives spin toward
-// rolling.  Zero slip → pure rolling: only low rolling friction acts.
-// This is the real physics: follow keeps the ball going, draw stops/reverses it.
-const SLIDE_DECEL = 0.14;   // px/tick²  kinetic friction (sliding)
-const ROLL_DECEL  = 0.022;  // px/tick²  rolling friction (pure roll)
-const MOI_FACTOR  = 2.5;    // 5/2 — moment of inertia of solid sphere
-const SPIN_SCALE  = 2.1;    // how much user spin translates into initial ω
-const ballSpin = {};        // { id: { rx, ry } }
-let   cueBallSpinInit = null; // { ball, sx, sy } — resolved on first physics tick
-
-function resetBallSpin(b) { ballSpin[b.id] = { rx: 0, ry: 0 }; }
+// ══ Spin state ════════════════════════════════════════════════════════════
+// shotInfo: set when a shot is fired, carries direction + spin values.
+// spinEffectQueue: spin velocity adjustments collected in collisionStart,
+//                 applied in afterUpdate once collision impulses are resolved.
+const SPIN_EFFECT = 0.5;  // fraction of pre-collision speed added as spin push
+let shotInfo = null;      // { cue, dirX, dirY, sx, sy }
+let spinEffectQueue = []; // [{ cue, dx, dy }]  applied in afterUpdate
 
 // ══ Visual rotation simulation (visible dot spin) ══════════════════════════
 const simAngles = {};
@@ -543,8 +536,7 @@ const render = Render.create({
 });
 
 const radius = 15;
-// frictionAir=0: we apply our own spin-aware friction every tick instead
-const ballBase = { restitution: 0.97, friction: 0, frictionStatic: 0, frictionAir: 0, density: 0.05 };
+const ballBase = { restitution: 0.97, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
 
 const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { visible: false } });
 const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { visible: false } });
@@ -562,8 +554,6 @@ Composite.add(engine.world, [
 Render.run(render);
 Runner.run(Runner.create(), engine);
 
-// Initialise spin state for all balls
-for (const b of [ballWhite, ballYellow, ballRed]) resetBallSpin(b);
 
 // ══ Helpers ═══════════════════════════════════════════════════════════════
 function getCueBall() {
@@ -599,59 +589,9 @@ function currentPositions() {
     };
 }
 
-// ══ Pre-collision velocity snapshot + billiards table friction ════════════
+// ══ Pre-collision velocity snapshot ═══════════════════════════════════════
 const prevVel = {};
 Events.on(engine, 'beforeUpdate', () => {
-    // ── Resolve initial spin on first tick after a shot ──────────────────
-    if (cueBallSpinInit) {
-        const { ball, sx, sy } = cueBallSpinInit;
-        const v = ball.velocity;
-        const spd = Math.hypot(v.x, v.y);
-        if (spd > 0.05) {
-            const dvx = v.x / spd, dvy = v.y / spd;
-            ballSpin[ball.id] = {
-                rx: (dvx * sy  + (-dvy) * sx) * spd * SPIN_SCALE,
-                ry: (dvy * sy  + ( dvx) * sx) * spd * SPIN_SCALE
-            };
-            cueBallSpinInit = null;
-        }
-    }
-
-    // ── Spin-aware table friction (sliding → rolling model) ───────────────
-    for (const b of [ballWhite, ballYellow, ballRed]) {
-        const spin = ballSpin[b.id];
-        if (!spin) continue;
-        const v = b.velocity;
-        const slipX = v.x - spin.rx, slipY = v.y - spin.ry;
-        const slipMag = Math.hypot(slipX, slipY);
-        const spd = Math.hypot(v.x, v.y);
-
-        if (slipMag > 0.04) {
-            // Kinetic sliding: friction acts opposite to slip on the CM,
-            // and drives the spin toward the linear velocity (rolling condition).
-            const snx = slipX / slipMag, sny = slipY / slipMag;
-            // Limit f so we never overshoot the rolling condition in one tick
-            const f = Math.min(SLIDE_DECEL, slipMag / (1 + MOI_FACTOR));
-            const nvx = v.x - snx * f, nvy = v.y - sny * f;
-            Body.setVelocity(b, { x: nvx, y: nvy });
-            spin.rx += snx * f * MOI_FACTOR;
-            spin.ry += sny * f * MOI_FACTOR;
-        } else {
-            // Pure rolling: synchronise spin → velocity, apply small roll friction
-            spin.rx = v.x; spin.ry = v.y;
-            if (spd < 0.025) {
-                Body.setVelocity(b, { x: 0, y: 0 });
-                spin.rx = spin.ry = 0;
-            } else {
-                const decel = Math.min(ROLL_DECEL, spd);
-                const f = 1 - decel / spd;
-                Body.setVelocity(b, { x: v.x * f, y: v.y * f });
-                spin.rx = b.velocity.x; spin.ry = b.velocity.y;
-            }
-        }
-    }
-
-    // ── Pre-collision snapshot (for carambola direction validation) ────────
     for (const b of [ballWhite, ballYellow, ballRed])
         prevVel[b.id] = { x: b.velocity.x, y: b.velocity.y };
 });
@@ -674,11 +614,31 @@ Events.on(engine, 'collisionStart', (event) => {
 
         if (target === tA) hitA = true;
         if (target === tB) hitB = true;
+
+        // Queue spin effect: applied in afterUpdate after collision impulses resolve
+        if (shotInfo && cv) {
+            const preSpd = Math.hypot(cv.x, cv.y);
+            const dv = shotInfo.sy * preSpd * SPIN_EFFECT;
+            if (Math.abs(dv) > 0.05)
+                spinEffectQueue.push({ cue, dx: shotInfo.dirX * dv, dy: shotInfo.dirY * dv });
+        }
     }
 });
 
 // ══ After-update: visual rotation + score evaluation ══════════════════════
 Events.on(engine, 'afterUpdate', () => {
+    // Apply queued spin effects (follow/draw) after collision impulses
+    for (const eff of spinEffectQueue) {
+        const MAX_SPD = 18;
+        const nx = eff.cue.velocity.x + eff.dx;
+        const ny = eff.cue.velocity.y + eff.dy;
+        const spd = Math.hypot(nx, ny);
+        Body.setVelocity(eff.cue, spd > MAX_SPD
+            ? { x: nx/spd*MAX_SPD, y: ny/spd*MAX_SPD }
+            : { x: nx, y: ny });
+    }
+    spinEffectQueue = [];
+
     // Visual dot spin (proportional to speed)
     for (const b of [ballWhite, ballYellow, ballRed])
         simAngles[b.id] = (simAngles[b.id] || 0) + Math.hypot(b.velocity.x, b.velocity.y) * 0.055;
@@ -803,8 +763,11 @@ function fireShot(cueBall, force) {
     pendingScoreEval = true;
     hasStartedMoving = false;
     hitA = hitB = false;
-    for (const b of [ballWhite, ballYellow, ballRed]) resetBallSpin(b);
-    cueBallSpinInit = { ball: cueBall, sx: spinX, sy: spinY };
+    spinEffectQueue = [];
+    const mag = Math.hypot(force.x, force.y);
+    shotInfo = mag > 0
+        ? { cue: cueBall, dirX: force.x/mag, dirY: force.y/mag, sx: spinX, sy: spinY }
+        : null;
     Body.applyForce(cueBall, cueBall.position, force);
     updateTurnCursor();
 }
@@ -1309,11 +1272,10 @@ function beginGame() {
 }
 
 function resetBalls() {
-    for (const [b,x,y] of [[ballWhite,200,200],[ballYellow,600,150],[ballRed,600,250]]) {
-        Body.setPosition(b,{x,y}); Body.setVelocity(b,{x:0,y:0});
-        resetBallSpin(b);
-    }
-    cueBallSpinInit = null;
+    for (const [b,x,y] of [[ballWhite,200,200],[ballYellow,600,150],[ballRed,600,250]])
+        { Body.setPosition(b,{x,y}); Body.setVelocity(b,{x:0,y:0}); }
+    shotInfo = null;
+    spinEffectQueue = [];
     setSpinDot(0, 0);
 }
 
