@@ -67,12 +67,13 @@ io.on('connection', socket => {
     });
 
     // ── P1 sets target score and is ready ──
-    socket.on('p1-ready', ({ targetScore }) => {
+    socket.on('p1-ready', ({ targetScore, gameMode }) => {
         const room = getRoom(socket);
         if (!room || socket.data.number !== 1) return;
-        room.config       = room.config || {};
+        room.config           = room.config || {};
         room.config.targetScore = targetScore;
-        room.p1Ready      = true;
+        room.config.gameMode    = gameMode || 'libre';
+        room.p1Ready            = true;
         maybeStartGame(room);
     });
 

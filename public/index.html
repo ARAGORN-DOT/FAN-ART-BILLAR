@@ -123,6 +123,31 @@
         .ball-btn.yellow .ball-circle { background: #f1c40f; }
         .ball-btn.red    .ball-circle { background: #e74c3c; }
 
+        /* ── Mode selector (Libre / 9y1) ── */
+        .mode-opts { display: flex; gap: 8px; }
+        .mode-opt {
+            padding: 8px 18px; border-radius: 9px; border: 1.5px solid rgba(255,255,255,0.13);
+            background: transparent; color: rgba(255,255,255,0.45); font-size: 12px;
+            font-weight: 700; letter-spacing: 1.5px; cursor: pointer; transition: all .15s;
+            font-family: inherit;
+        }
+        .mode-opt:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); }
+        .mode-opt.selected { border-color: #f0a030; background: rgba(240,160,48,0.12); color: #f0a030; }
+
+        /* ── 3-bandas indicator ── */
+        #banks-indicator {
+            font-size: 11px; font-weight: 700; letter-spacing: 2px;
+            color: #f0a030; text-transform: uppercase;
+            display: flex; align-items: center; gap: 8px;
+            min-height: 20px; margin-bottom: 2px;
+        }
+        .banks-pips { display: flex; gap: 4px; }
+        .banks-pip {
+            width: 10px; height: 10px; border-radius: 50%;
+            border: 1.5px solid #f0a030; background: transparent; transition: background .15s;
+        }
+        .banks-pip.lit { background: #f0a030; }
+
         .score-opts { display: flex; gap: 8px; }
         .score-opt {
             width: 54px; height: 42px; border-radius: 10px;
@@ -361,7 +386,7 @@
         <div class="modal-card">
             <div class="modal-title" id="setup-title">Billar Francés</div>
 
-            <!-- P1 online: chooses target score -->
+            <!-- P1 online: chooses target score + mode -->
             <div id="setup-p1" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%">
                 <div class="modal-sub">Puntos para ganar</div>
                 <div class="score-opts">
@@ -369,6 +394,11 @@
                     <button class="score-opt"          data-pts="15"  onclick="selectPts(15)">15</button>
                     <button class="score-opt"          data-pts="20"  onclick="selectPts(20)">20</button>
                     <button class="score-opt"          data-pts="25"  onclick="selectPts(25)">25</button>
+                </div>
+                <div class="modal-sub" style="margin-top:4px">Modo de juego</div>
+                <div class="mode-opts">
+                    <button class="mode-opt selected" data-mode="libre" onclick="selectMode('libre')">LIBRE</button>
+                    <button class="mode-opt"          data-mode="9y1"   onclick="selectMode('9y1')">9 Y 1</button>
                 </div>
                 <button class="start-btn" id="p1-ready-btn" onclick="p1Confirm()">Confirmar</button>
             </div>
@@ -407,6 +437,13 @@
                         <button class="score-opt"          data-pts="15"  onclick="selectPts(15)">15</button>
                         <button class="score-opt"          data-pts="20"  onclick="selectPts(20)">20</button>
                         <button class="score-opt"          data-pts="25"  onclick="selectPts(25)">25</button>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
+                    <div class="modal-sub">Modo de juego</div>
+                    <div class="mode-opts">
+                        <button class="mode-opt selected" data-mode="libre" onclick="selectMode('libre')">LIBRE</button>
+                        <button class="mode-opt"          data-mode="9y1"   onclick="selectMode('9y1')">9 Y 1</button>
                     </div>
                 </div>
                 <button class="start-btn" onclick="startLocalGame()">Comenzar partida</button>
@@ -459,6 +496,14 @@
         </div>
     </div>
     <div id="target-display">META: 10 CARAMBOLAS</div>
+    <div id="banks-indicator" style="display:none">
+        <span id="banks-label">3 BANDAS</span>
+        <div class="banks-pips">
+            <div class="banks-pip" id="pip0"></div>
+            <div class="banks-pip" id="pip1"></div>
+            <div class="banks-pip" id="pip2"></div>
+        </div>
+    </div>
 
     <div id="game-row">
         <div style="position:relative">
@@ -496,7 +541,37 @@ const net = {
 };
 
 // ══ Config ════════════════════════════════════════════════════════════════
-const cfg = { p2Ball: 'yellow', targetScore: 10 };
+const cfg = { p2Ball: 'yellow', targetScore: 10, gameMode: 'libre' };
+
+let _mode = 'libre'; // staging value for setup UI
+let wallHitsThisShot = 0;
+
+function selectMode(m) {
+    _mode = m;
+    document.querySelectorAll('.mode-opt').forEach(x => x.classList.remove('selected'));
+    document.querySelectorAll(`.mode-opt[data-mode="${m}"]`).forEach(x => x.classList.add('selected'));
+}
+
+function needs3Banks(playerScore) {
+    if (cfg.gameMode !== '9y1') return false;
+    const next = playerScore + 1;
+    return next % 10 === 0 || next === cfg.targetScore;
+}
+
+function updateBanksIndicator() {
+    const ind = document.getElementById('banks-indicator');
+    if (cfg.gameMode !== '9y1') { ind.style.display = 'none'; return; }
+    const score = gs.scores[gs.currentPlayer] || 0;
+    if (needs3Banks(score)) {
+        ind.style.display = 'flex';
+        document.getElementById('banks-label').textContent =
+            pendingScoreEval ? `BANDAS: ${wallHitsThisShot}/3` : '3 BANDAS REQUERIDAS';
+        for (let i = 0; i < 3; i++)
+            document.getElementById(`pip${i}`).classList.toggle('lit', i < wallHitsThisShot);
+    } else {
+        ind.style.display = 'none';
+    }
+}
 
 // ══ Game state ════════════════════════════════════════════════════════════
 const gs = {
@@ -603,6 +678,16 @@ Events.on(engine, 'collisionStart', (event) => {
     const [tA, tB] = getTargets();
 
     for (const { bodyA, bodyB } of event.pairs) {
+        // Count wall (banda) hits for the cue ball (9y1 mode)
+        if (cfg.gameMode === '9y1') {
+            const other = bodyA === cue ? bodyB : bodyA === cue ? bodyA : null;
+            if ((bodyA === cue || bodyB === cue) &&
+                (bodyA.isStatic || bodyB.isStatic)) {
+                wallHitsThisShot++;
+                updateBanksIndicator();
+            }
+        }
+
         if (bodyA !== cue && bodyB !== cue) continue;
         const target = bodyA === cue ? bodyB : bodyA;
         if (target !== tA && target !== tB) continue;
@@ -676,7 +761,10 @@ Events.on(engine, 'afterUpdate', () => {
     // ── Evaluate ──
     pendingScoreEval = false;
     hasStartedMoving = false;
-    const scored = hitA && hitB;
+    const carambolaHit = hitA && hitB;
+    // 9y1: if 3 banks required, carom only counts if 3+ walls were touched
+    const bankRequired = needs3Banks(gs.scores[gs.currentPlayer]);
+    const scored = carambolaHit && (!bankRequired || wallHitsThisShot >= 3);
     const scorer = scored ? gs.currentPlayer : null;
     hitA = hitB = false;
 
@@ -686,10 +774,15 @@ Events.on(engine, 'afterUpdate', () => {
         showMessage('¡ Carambola !', 'hit');
         // currentPlayer stays the same (scored → same player continues)
     } else {
+        if (carambolaHit && bankRequired && wallHitsThisShot < 3) {
+            showMessage(`¡ Necesitas 3 bandas ! (${wallHitsThisShot}/3)`, 'miss');
+        } else {
+            showMessage(`Fallo — turno del J${gs.currentPlayer === 1 ? 2 : 1}`, 'miss');
+        }
         gs.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
         updateTurnUI();
-        showMessage(`Fallo — turno del J${gs.currentPlayer}`, 'miss');
     }
+    updateBanksIndicator();
 
     // ── Online: broadcast result to opponent ──
     if (net.mode === 'online') {
@@ -764,6 +857,8 @@ function fireShot(cueBall, force) {
     hasStartedMoving = false;
     hitA = hitB = false;
     spinEffectQueue = [];
+    wallHitsThisShot = 0;
+    updateBanksIndicator();
     const mag = Math.hypot(force.x, force.y);
     shotInfo = mag > 0
         ? { cue: cueBall, dirX: force.x/mag, dirY: force.y/mag, sx: spinX, sy: spinY }
@@ -1135,8 +1230,9 @@ function connectSocket() {
     });
 
     net.socket.on('game-start', ({ config }) => {
-        cfg.p2Ball       = config.p2Ball;
-        cfg.targetScore  = config.targetScore;
+        cfg.p2Ball      = config.p2Ball;
+        cfg.targetScore = config.targetScore;
+        cfg.gameMode    = config.gameMode || 'libre';
         hideOverlay('setup-overlay');
         beginGame();
     });
@@ -1267,7 +1363,7 @@ function p1Confirm() {
     document.getElementById('setup-waiting').style.display = 'flex';
     document.getElementById('setup-wait-text').textContent = 'Esperando que J2 elija su bola...';
     document.getElementById('p1-ready-btn').disabled = true;
-    net.socket.emit('p1-ready', { targetScore: _pts });
+    net.socket.emit('p1-ready', { targetScore: _pts, gameMode: _mode });
 }
 
 function p2Confirm() {
@@ -1279,7 +1375,7 @@ function p2Confirm() {
 }
 
 function startLocalGame() {
-    cfg.p2Ball = _p2ball; cfg.targetScore = _pts;
+    cfg.p2Ball = _p2ball; cfg.targetScore = _pts; cfg.gameMode = _mode;
     hideOverlay('setup-overlay');
     beginGame();
 }
@@ -1296,9 +1392,11 @@ function beginGame() {
     const p2Color = cfg.p2Ball === 'yellow' ? '#f1c40f' : '#e74c3c';
     document.getElementById('p2-dot').style.background = p2Color;
     document.getElementById('p2-card').style.color     = p2Color;
-    document.getElementById('target-display').textContent = `META: ${cfg.targetScore} CARAMBOLAS`;
+    const modeLabel = cfg.gameMode === '9y1' ? '  |  MODO 9 Y 1' : '';
+    document.getElementById('target-display').textContent = `META: ${cfg.targetScore} CARAMBOLAS${modeLabel}`;
     document.getElementById('p1-score').textContent = '0';
     document.getElementById('p2-score').textContent = '0';
+    wallHitsThisShot = 0;
 
     // Show player names in scoreboard (online only)
     if (net.mode === 'online') {
@@ -1311,6 +1409,7 @@ function beginGame() {
 
     updateTurnUI();
     updateTurnCursor();
+    updateBanksIndicator();
     resetBalls();
 }
 
@@ -1330,6 +1429,7 @@ function updateTurnUI() {
     const dc = cb.label==='white'?'#ffffff':cb.label==='yellow'?'#f1c40f':'#e74c3c';
     spinDotEl.style.background = dc;
     spinDotEl.style.boxShadow  = `0 0 10px ${dc}cc, 0 2px 4px rgba(0,0,0,0.4)`;
+    updateBanksIndicator();
 }
 
 function updateTurnCursor() {
