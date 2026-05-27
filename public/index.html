@@ -628,10 +628,10 @@ Events.on(engine, 'afterUpdate', () => {
         const spd = Math.hypot(preVX, preVY);
         if (spd > 0.1) {
             const dvx = preVX / spd, dvy = preVY / spd;
-            const str = spd * 0.7;  // moderated — 1.2 caused tunneling
+            const str = spd * 1.0;
             let nx = ball.velocity.x + dvx * spinY * str + (-dvy) * spinX * str * 0.60;
             let ny = ball.velocity.y + dvy * spinY * str + ( dvx) * spinX * str * 0.60;
-            // Cap combined speed so ball can't tunnel through walls
+            // Cap so fast shots with full spin can't tunnel through walls
             const ns = Math.hypot(nx, ny);
             const MAX_SPD = 4.2;
             if (ns > MAX_SPD) { nx = nx / ns * MAX_SPD; ny = ny / ns * MAX_SPD; }
