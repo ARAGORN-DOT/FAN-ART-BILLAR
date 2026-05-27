@@ -628,12 +628,27 @@ Events.on(engine, 'afterUpdate', () => {
         const spd = Math.hypot(preVX, preVY);
         if (spd > 0.1) {
             const dvx = preVX / spd, dvy = preVY / spd;
-            const str = spd * 1.2;
-            Body.setVelocity(ball, {
-                x: ball.velocity.x + dvx * spinY * str + (-dvy) * spinX * str * 0.65,
-                y: ball.velocity.y + dvy * spinY * str + ( dvx) * spinX * str * 0.65
-            });
+            const str = spd * 0.7;  // moderated — 1.2 caused tunneling
+            let nx = ball.velocity.x + dvx * spinY * str + (-dvy) * spinX * str * 0.60;
+            let ny = ball.velocity.y + dvy * spinY * str + ( dvx) * spinX * str * 0.60;
+            // Cap combined speed so ball can't tunnel through walls
+            const ns = Math.hypot(nx, ny);
+            const MAX_SPD = 4.2;
+            if (ns > MAX_SPD) { nx = nx / ns * MAX_SPD; ny = ny / ns * MAX_SPD; }
+            Body.setVelocity(ball, { x: nx, y: ny });
         }
+    }
+
+    // Position guard — rescue any ball that somehow escaped the play area
+    for (const b of [ballWhite, ballYellow, ballRed]) {
+        let { x, y } = b.position;
+        let { x: vx, y: vy } = b.velocity;
+        let fix = false;
+        if (x < WX0) { x = WX0; vx =  Math.abs(vx); fix = true; }
+        if (x > WX1) { x = WX1; vx = -Math.abs(vx); fix = true; }
+        if (y < WY0) { y = WY0; vy =  Math.abs(vy); fix = true; }
+        if (y > WY1) { y = WY1; vy = -Math.abs(vy); fix = true; }
+        if (fix) { Body.setPosition(b, { x, y }); Body.setVelocity(b, { x: vx, y: vy }); }
     }
 
     if (!pendingScoreEval || gs.phase !== 'playing') return;
@@ -720,7 +735,7 @@ cvs.addEventListener('pointerup', (e) => {
     if (Math.hypot(dx, dy) < MIN_PX) return;
 
     for (const b of [ballWhite, ballYellow, ballRed]) b.frictionAir = 0.011;
-    cb.frictionAir = Math.max(0.003, Math.min(0.029, 0.011 - spinY * 0.012));
+    cb.frictionAir = Math.max(0.005, Math.min(0.022, 0.011 - spinY * 0.008));
 
     let fx = dx * PWR, fy = dy * PWR;
     // Apple Pencil / stylus: scale force by pressure (0.5 = normal, 1.0 = full)
