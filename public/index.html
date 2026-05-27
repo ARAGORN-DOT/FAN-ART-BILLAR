@@ -881,14 +881,6 @@ function draw3DBall(ctx, ball) {
     sp.addColorStop(1,'rgba(255,255,255,0)');
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=sp; ctx.fill();
 
-    // Rotation marker dots (4-dot cross spinning with simulated angle)
-    const a = simAngles[ball.id]||0, dotR=2.2, dist=r*0.60;
-    for (const da of [0, Math.PI*0.5, Math.PI, Math.PI*1.5]) {
-        const scale = da===0||da===Math.PI ? 1 : 0.65;
-        const mx=x+Math.cos(a+da)*dist*scale, my=y+Math.sin(a+da)*dist*scale;
-        ctx.beginPath(); ctx.arc(mx,my,dotR*scale,0,Math.PI*2);
-        ctx.fillStyle=dotC; ctx.fill();
-    }
 
     // Edge outline
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
