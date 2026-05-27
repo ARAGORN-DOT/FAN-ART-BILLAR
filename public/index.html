@@ -472,24 +472,30 @@ let spinX = 0, spinY = 0;
 let spinApplied = false;
 let pendingSpin = null;
 
+// ══ Visual rotation simulation (visible dot spin) ══════════════════════════
+const simAngles = {};
+
 // ══ Physics ═══════════════════════════════════════════════════════════════
 const engine = Engine.create();
 engine.gravity.x = 0; engine.gravity.y = 0;
 Resolver._restingThresh = 0.001;
+engine.positionIterations = 10;
+engine.velocityIterations = 8;
+engine.enableSleeping     = false;
 
 const render = Render.create({
     canvas: document.getElementById('gameCanvas'), engine,
-    options: { width: 800, height: 400, wireframes: false, background: '#0a6c3a' }
+    options: { width: 800, height: 400, wireframes: false, background: '#1a7040' }
 });
 
 const radius = 15;
 const ballBase = { restitution: 0.97, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
 
-const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { fillStyle: '#f0f0f0' } });
-const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { fillStyle: '#f1c40f' } });
-const ballRed    = Bodies.circle(600, 250, radius, { ...ballBase, label: 'red',    render: { fillStyle: '#e74c3c' } });
+const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { visible: false } });
+const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { visible: false } });
+const ballRed    = Bodies.circle(600, 250, radius, { ...ballBase, label: 'red',    render: { visible: false } });
 
-const wO = { isStatic: true, restitution: 1, friction: 0, frictionStatic: 0, render: { fillStyle: '#1e4d2b' } };
+const wO = { isStatic: true, restitution: 1, friction: 0, frictionStatic: 0, render: { visible: false } };
 Composite.add(engine.world, [
     ballWhite, ballYellow, ballRed,
     Bodies.rectangle(400,   5, 800,  10, wO),
@@ -570,6 +576,10 @@ Events.on(engine, 'collisionStart', (event) => {
 
 // ══ After-update: spin + score evaluation ═════════════════════════════════
 Events.on(engine, 'afterUpdate', () => {
+    // Simulate visual ball rotation from linear velocity
+    for (const b of [ballWhite, ballYellow, ballRed])
+        simAngles[b.id] = (simAngles[b.id] || 0) + Math.hypot(b.velocity.x, b.velocity.y) * 0.055;
+
     // Apply queued spin via setVelocity (one tick after collision, so solver is settled)
     if (pendingSpin) {
         const { ball, preVX, preVY } = pendingSpin;
@@ -577,7 +587,7 @@ Events.on(engine, 'afterUpdate', () => {
         const spd = Math.hypot(preVX, preVY);
         if (spd > 0.1) {
             const dvx = preVX / spd, dvy = preVY / spd;
-            const str = spd * 0.9;
+            const str = spd * 1.2;
             Body.setVelocity(ball, {
                 x: ball.velocity.x + dvx * spinY * str + (-dvy) * spinX * str * 0.65,
                 y: ball.velocity.y + dvy * spinY * str + ( dvx) * spinX * str * 0.65
@@ -662,7 +672,7 @@ window.addEventListener('mouseup', () => {
     if (Math.hypot(dx, dy) < MIN_PX) return;
 
     for (const b of [ballWhite, ballYellow, ballRed]) b.frictionAir = 0.011;
-    cb.frictionAir = Math.max(0.004, Math.min(0.022, 0.011 - spinY * 0.007));
+    cb.frictionAir = Math.max(0.003, Math.min(0.029, 0.011 - spinY * 0.012));
 
     let fx = dx * PWR, fy = dy * PWR;
     const m = Math.hypot(fx, fy);
@@ -696,80 +706,231 @@ function snapMouse(e) {
     mPos.x = e.clientX - r.left; mPos.y = e.clientY - r.top;
 }
 
-// ══ Canvas aiming render ═══════════════════════════════════════════════════
+// ══ Table & ball visual rendering ═════════════════════════════════════════
 const WX0 = 25, WX1 = 775, WY0 = 25, WY1 = 375;
+const FW  = 20; // frame width (px)
+let lerpAX = null, lerpAY = null; // smoothed aim position
 
+function drawTableFrame(ctx) {
+    // Felt re-surface (clean green, slightly lighter in center)
+    const fg = ctx.createRadialGradient(400,200,40,400,200,420);
+    fg.addColorStop(0,   '#1f7d42');
+    fg.addColorStop(0.7, '#1a7040');
+    fg.addColorStop(1,   '#155e35');
+    ctx.fillStyle = fg;
+    ctx.fillRect(FW, FW, 800-FW*2, 400-FW*2);
+
+    // Subtle felt texture (faint diamond crosshatch)
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth   = 0.5;
+    for (let x = FW; x < 800-FW; x += 18) {
+        ctx.beginPath(); ctx.moveTo(x,FW); ctx.lineTo(x,400-FW); ctx.stroke();
+    }
+    for (let y = FW; y < 400-FW; y += 18) {
+        ctx.beginPath(); ctx.moveTo(FW,y); ctx.lineTo(800-FW,y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Wooden frame — top rail
+    let wg = ctx.createLinearGradient(0,0,0,FW);
+    wg.addColorStop(0,'#3a1c07'); wg.addColorStop(0.45,'#9b6228'); wg.addColorStop(0.75,'#c8894a'); wg.addColorStop(1,'#7a4818');
+    ctx.fillStyle = wg; ctx.fillRect(0,0,800,FW);
+
+    // bottom rail
+    wg = ctx.createLinearGradient(0,400-FW,0,400);
+    wg.addColorStop(0,'#7a4818'); wg.addColorStop(0.25,'#c8894a'); wg.addColorStop(0.55,'#9b6228'); wg.addColorStop(1,'#3a1c07');
+    ctx.fillStyle = wg; ctx.fillRect(0,400-FW,800,FW);
+
+    // left rail
+    wg = ctx.createLinearGradient(0,0,FW,0);
+    wg.addColorStop(0,'#3a1c07'); wg.addColorStop(0.45,'#9b6228'); wg.addColorStop(0.75,'#c8894a'); wg.addColorStop(1,'#7a4818');
+    ctx.fillStyle = wg; ctx.fillRect(0,FW,FW,400-FW*2);
+
+    // right rail
+    wg = ctx.createLinearGradient(800-FW,0,800,0);
+    wg.addColorStop(0,'#7a4818'); wg.addColorStop(0.25,'#c8894a'); wg.addColorStop(0.55,'#9b6228'); wg.addColorStop(1,'#3a1c07');
+    ctx.fillStyle = wg; ctx.fillRect(800-FW,FW,FW,400-FW*2);
+
+    // Frame inner shadow
+    ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=2.5;
+    ctx.strokeRect(FW,FW,800-FW*2,400-FW*2);
+    // Frame outer highlight
+    ctx.strokeStyle='rgba(220,150,70,0.28)'; ctx.lineWidth=1;
+    ctx.strokeRect(1,1,798,398);
+
+    // ── Diamond guides ──────────────────────────────────────────────────────
+    const iW = 800-FW*2, iH = 400-FW*2;           // interior size
+    const xD = [FW+iW*0.25, FW+iW*0.5, FW+iW*0.75]; // 3 per long rail
+    const yD = [FW+iH/3, FW+iH*2/3];               // 2 per short rail
+    const d_y = FW*0.5, d_yb = 400-FW*0.5;
+    const d_x = FW*0.5, d_xr = 800-FW*0.5;
+    for (const x of xD) { drawDiamond(ctx,x,d_y); drawDiamond(ctx,x,d_yb); }
+    for (const y of yD) { drawDiamond(ctx,d_x,y); drawDiamond(ctx,d_xr,y); }
+}
+
+function drawDiamond(ctx, x, y) {
+    const hw=4, hh=6;
+    ctx.beginPath();
+    ctx.moveTo(x,y-hh); ctx.lineTo(x+hw,y); ctx.lineTo(x,y+hh); ctx.lineTo(x-hw,y);
+    ctx.closePath();
+    ctx.fillStyle='#f0d878'; ctx.fill();
+    ctx.strokeStyle='#9a7c1a'; ctx.lineWidth=0.8; ctx.stroke();
+    // Shine sliver
+    ctx.beginPath(); ctx.moveTo(x,y-hh+1); ctx.lineTo(x+1.5,y-1.5);
+    ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=0.7; ctx.stroke();
+}
+
+function draw3DBall(ctx, ball) {
+    const x=ball.position.x, y=ball.position.y, r=radius;
+    let cL,cM,cD,dotC;
+    if      (ball.label==='white')  { cL='#ffffff'; cM='#e0e0e0'; cD='#858585'; dotC='rgba(55,55,55,0.8)'; }
+    else if (ball.label==='yellow') { cL='#fff8b0'; cM='#f5c21a'; cD='#967200'; dotC='rgba(75,48,0,0.8)'; }
+    else                            { cL='#ff9898'; cM='#e64040'; cD='#7a0000'; dotC='rgba(45,0,0,0.8)'; }
+
+    // Drop shadow
+    ctx.save();
+    ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=10;
+    ctx.shadowOffsetX=2.5; ctx.shadowOffsetY=3.5;
+
+    // Sphere base (light from upper-left)
+    const g = ctx.createRadialGradient(x-r*0.28,y-r*0.32,r*0.04, x,y,r);
+    g.addColorStop(0,cL); g.addColorStop(0.45,cM); g.addColorStop(1,cD);
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=g; ctx.fill();
+    ctx.restore();
+
+    // Specular highlight (lamp reflection)
+    const sp = ctx.createRadialGradient(x-r*0.32,y-r*0.38,0, x-r*0.14,y-r*0.20,r*0.54);
+    sp.addColorStop(0,'rgba(255,255,255,0.90)');
+    sp.addColorStop(0.38,'rgba(255,255,255,0.22)');
+    sp.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=sp; ctx.fill();
+
+    // Rotation marker dots (4-dot cross spinning with simulated angle)
+    const a = simAngles[ball.id]||0, dotR=2.2, dist=r*0.60;
+    for (const da of [0, Math.PI*0.5, Math.PI, Math.PI*1.5]) {
+        const scale = da===0||da===Math.PI ? 1 : 0.65;
+        const mx=x+Math.cos(a+da)*dist*scale, my=y+Math.sin(a+da)*dist*scale;
+        ctx.beginPath(); ctx.arc(mx,my,dotR*scale,0,Math.PI*2);
+        ctx.fillStyle=dotC; ctx.fill();
+    }
+
+    // Edge outline
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=0.9; ctx.stroke();
+}
+
+// ══ Canvas aiming render ═══════════════════════════════════════════════════
 Events.on(render, 'afterRender', () => {
-    if (gs.phase !== 'playing') return;
     const ctx = render.context;
+
+    // Always draw the table frame + diamonds + balls on top of Matter.js bg
+    drawTableFrame(ctx);
+    for (const b of [ballWhite,ballYellow,ballRed]) draw3DBall(ctx,b);
+
+    if (gs.phase !== 'playing') return;
+
     const cb = getCueBall();
     const [tA, tB] = getTargets();
     const cx = cb.position.x, cy = cb.position.y;
 
-    if (!isDragging && !pendingScoreEval && cb.speed < 0.1 && isMyTurn()) {
-        ctx.beginPath(); ctx.arc(cx, cy, radius+5, 0, Math.PI*2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2; ctx.stroke();
-        for (const t of [tA, tB]) {
-            ctx.beginPath(); ctx.arc(t.position.x, t.position.y, radius+5, 0, Math.PI*2);
-            ctx.strokeStyle = 'rgba(120,220,255,0.14)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Idle glow rings around balls
+    if (!isDragging && !pendingScoreEval && cb.speed < 0.12 && isMyTurn()) {
+        ctx.beginPath(); ctx.arc(cx,cy,radius+6,0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=2; ctx.stroke();
+        for (const t of [tA,tB]) {
+            ctx.beginPath(); ctx.arc(t.position.x,t.position.y,radius+6,0,Math.PI*2);
+            ctx.strokeStyle='rgba(120,220,255,0.15)'; ctx.lineWidth=1.5; ctx.stroke();
         }
     }
 
-    if (!isDragging) return;
+    if (!isDragging) { lerpAX=null; lerpAY=null; return; }
 
-    const aimVX = mPos.x-cx, aimVY = mPos.y-cy;
-    const aimMag = Math.hypot(aimVX, aimVY);
-    if (aimMag < 5) return;
+    // Smooth-lerp the aim position for fluid feel
+    if (lerpAX===null) { lerpAX=mPos.x; lerpAY=mPos.y; }
+    lerpAX += (mPos.x-lerpAX)*0.20;
+    lerpAY += (mPos.y-lerpAY)*0.20;
 
-    const aNX = aimVX/aimMag, aNY = aimVY/aimMag;
-    const dirX = -aNX, dirY = -aNY;
-    const pRatio = Math.min(aimMag, 300)/300;
-    const aimCol = powerColor(pRatio);
+    const aimVX=lerpAX-cx, aimVY=lerpAY-cy;
+    const aimMag=Math.hypot(aimVX,aimVY);
+    if (aimMag<5) return;
 
-    const lim = Math.min(aimMag, 300);
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+aNX*lim, cy+aNY*lim);
-    ctx.strokeStyle = aimCol; ctx.lineWidth = 4; ctx.setLineDash([5,10]); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(cx+aNX*lim, cy+aNY*lim, 5, 0, Math.PI*2);
-    ctx.fillStyle = aimCol; ctx.fill();
+    const aNX=aimVX/aimMag, aNY=aimVY/aimMag;
+    const dirX=-aNX, dirY=-aNY;
+    const pRatio=Math.min(aimMag,300)/300;
+    const aimCol=powerColor(pRatio);
+    const lim=Math.min(aimMag,300);
 
-    const HD = radius*2;
+    // ── Cue stick ───────────────────────────────────────────────────────────
+    const cueAngle=Math.atan2(aNY,aNX);
+    const tipGap=radius+4+lim*0.06; // tip floats back with power
+    const cueLen=220;
+    ctx.save();
+    ctx.translate(cx,cy); ctx.rotate(cueAngle);
+    // Ferrule (white collar near tip)
+    ctx.fillStyle='#e8e8e8';
+    ctx.fillRect(tipGap-3,-2,5,4);
+    // Shaft gradient (wood taper)
+    const cg=ctx.createLinearGradient(0,-7,0,7);
+    cg.addColorStop(0,'#b87333'); cg.addColorStop(0.4,'#e8b878'); cg.addColorStop(0.6,'#d4a060'); cg.addColorStop(1,'#8b5a1c');
+    ctx.beginPath();
+    ctx.moveTo(tipGap+2,-1.8); ctx.lineTo(tipGap+cueLen,-6);
+    ctx.lineTo(tipGap+cueLen, 6); ctx.lineTo(tipGap+2, 1.8);
+    ctx.closePath(); ctx.fillStyle=cg; ctx.fill();
+    ctx.strokeStyle='rgba(40,15,0,0.5)'; ctx.lineWidth=0.6; ctx.stroke();
+    // Blue chalk tip
+    ctx.fillStyle='#4a8cd4';
+    ctx.beginPath();
+    ctx.moveTo(tipGap,-2.2); ctx.lineTo(tipGap+3,-1.5);
+    ctx.lineTo(tipGap+3, 1.5); ctx.lineTo(tipGap,-2.2+4.4);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Power dot at aim limit
+    ctx.beginPath(); ctx.arc(cx+aNX*lim,cy+aNY*lim,4.5,0,Math.PI*2);
+    ctx.fillStyle=aimCol; ctx.fill();
+
+    // ── Trajectory line ─────────────────────────────────────────────────────
+    const HD=radius*2;
     let tx=cx,ty=cy,hitWall=false,hitObj=null,dist=0;
-    while (!hitWall && !hitObj && dist<1200) {
+    while(!hitWall&&!hitObj&&dist<1200) {
         tx+=dirX; ty+=dirY; dist++;
-        if (tx<=WX0){tx=WX0;hitWall=true;break;} if(tx>=WX1){tx=WX1;hitWall=true;break;}
-        if (ty<=WY0){ty=WY0;hitWall=true;break;} if(ty>=WY1){ty=WY1;hitWall=true;break;}
-        if (Math.hypot(tx-tA.position.x,ty-tA.position.y)<=HD){hitObj=tA;break;}
-        if (Math.hypot(tx-tB.position.x,ty-tB.position.y)<=HD){hitObj=tB;break;}
+        if(tx<=WX0){tx=WX0;hitWall=true;break;} if(tx>=WX1){tx=WX1;hitWall=true;break;}
+        if(ty<=WY0){ty=WY0;hitWall=true;break;} if(ty>=WY1){ty=WY1;hitWall=true;break;}
+        if(Math.hypot(tx-tA.position.x,ty-tA.position.y)<=HD){hitObj=tA;break;}
+        if(Math.hypot(tx-tB.position.x,ty-tB.position.y)<=HD){hitObj=tB;break;}
     }
 
     ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(tx,ty);
-    ctx.strokeStyle='rgba(255,255,255,0.78)';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
-    ctx.beginPath();ctx.arc(tx,ty,radius,0,Math.PI*2);
-    ctx.strokeStyle='rgba(255,255,255,0.28)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.75)'; ctx.lineWidth=1.5; ctx.setLineDash([]); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx,ty,radius,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1.5; ctx.stroke();
 
     if (hitObj) {
-        ctx.beginPath();ctx.arc(hitObj.position.x,hitObj.position.y,radius+7,0,Math.PI*2);
-        ctx.strokeStyle='rgba(255,240,80,0.5)';ctx.lineWidth=2;ctx.stroke();
+        ctx.beginPath(); ctx.arc(hitObj.position.x,hitObj.position.y,radius+8,0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,240,80,0.55)'; ctx.lineWidth=2; ctx.stroke();
         const nX=hitObj.position.x-tx,nY=hitObj.position.y-ty;
         const nM=Math.hypot(nX,nY),nuX=nX/nM,nuY=nY/nM;
         const dot=dirX*nuX+dirY*nuY,bX=dirX-dot*nuX,bY=dirY-dot*nuY;
-        let predX=bX+dirX*spinY*0.82,predY=bY+dirY*spinY*0.82;
-        predX+=(-dirY)*spinX*0.82*0.55; predY+=(dirX)*spinX*0.82*0.55;
+        let predX=bX+dirX*spinY*0.88, predY=bY+dirY*spinY*0.88;
+        predX+=(-dirY)*spinX*0.88*0.55; predY+=(dirX)*spinX*0.88*0.55;
         const pm=Math.hypot(predX,predY);
         if(pm>0.01){predX/=pm;predY/=pm;}
-        const pc=spinY>0.2?'rgba(80,220,120,0.35)':spinY<-0.2?'rgba(255,100,80,0.35)':'rgba(255,255,255,0.22)';
-        ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx+predX*170,ty+predY*170);
-        ctx.strokeStyle=pc;ctx.lineWidth=2;ctx.setLineDash([3,7]);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(hitObj.position.x,hitObj.position.y);
-        ctx.lineTo(hitObj.position.x+nuX*70,hitObj.position.y+nuY*70);
-        ctx.strokeStyle='rgba(255,240,80,0.26)';ctx.lineWidth=1.5;ctx.stroke();
+        const pc=spinY>0.18?'rgba(80,230,120,0.42)':spinY<-0.18?'rgba(255,90,70,0.42)':'rgba(255,255,255,0.22)';
+        ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(tx+predX*180,ty+predY*180);
+        ctx.strokeStyle=pc; ctx.lineWidth=2; ctx.setLineDash([3,8]); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(hitObj.position.x,hitObj.position.y);
+        ctx.lineTo(hitObj.position.x+nuX*75,hitObj.position.y+nuY*75);
+        ctx.strokeStyle='rgba(255,240,80,0.28)'; ctx.lineWidth=1.5; ctx.stroke();
         ctx.setLineDash([]);
     } else if (hitWall) {
         let rX=dirX,rY=dirY;
         if(tx<=WX0||tx>=WX1)rX=-dirX; if(ty<=WY0||ty>=WY1)rY=-dirY;
-        ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx+rX*170,ty+rY*170);
-        ctx.strokeStyle='rgba(255,255,255,0.13)';ctx.lineWidth=1.5;ctx.setLineDash([3,7]);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(tx+rX*180,ty+rY*180);
+        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1.5; ctx.setLineDash([3,8]); ctx.stroke();
+        ctx.setLineDash([]);
     }
 });
 
