@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billar Francés</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at center, #1e2d3d 0%, #0f1923 100%);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            user-select: none;
+        }
+
+        /* ══ OVERLAYS ══ */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(8, 16, 24, 0.93);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100; backdrop-filter: blur(12px);
+            transition: opacity 0.35s ease;
+        }
+        .overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .modal-card {
+            background: rgba(255,255,255,0.055);
+            border: 1px solid rgba(255,255,255,0.11);
+            border-radius: 22px; padding: 38px 52px;
+            display: flex; flex-direction: column; align-items: center; gap: 26px;
+            min-width: 380px;
+        }
+        .modal-title { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+        .modal-sub   { font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+
+        /* ── Lobby inputs ── */
+        .lb-input {
+            width: 100%; height: 46px; border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,0.13);
+            background: rgba(255,255,255,0.06);
+            color: #fff; font-size: 15px; padding: 0 16px;
+            outline: none; transition: border-color .15s;
+            font-family: inherit;
+        }
+        .lb-input:focus { border-color: rgba(255,255,255,0.3); }
+        .lb-input::placeholder { color: rgba(255,255,255,0.22); }
+        .lb-input.code-input {
+            width: 110px; text-align: center; letter-spacing: 5px;
+            text-transform: uppercase; font-size: 20px; font-weight: 700;
+            padding: 0 8px;
+        }
+
+        /* ── Lobby buttons ── */
+        .lb-btn {
+            height: 48px; border-radius: 11px; border: none;
+            background: linear-gradient(135deg,#4a9eff,#2d7adf);
+            color: #fff; font-size: 13px; font-weight: 700;
+            letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+            transition: transform .12s, box-shadow .12s;
+            box-shadow: 0 3px 14px rgba(74,158,255,0.3);
+            padding: 0 22px;
+        }
+        .lb-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(74,158,255,0.4); }
+        .lb-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .lb-btn.outline {
+            background: transparent;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.5);
+            box-shadow: none; font-size: 12px;
+        }
+        .lb-btn.outline:hover { border-color: rgba(255,255,255,0.35); color: rgba(255,255,255,0.85); }
+
+        .lb-divider {
+            display: flex; align-items: center; gap: 12px; width: 100%;
+            color: rgba(255,255,255,0.2); font-size: 11px; letter-spacing: 1px;
+        }
+        .lb-divider::before, .lb-divider::after {
+            content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08);
+        }
+
+        .lb-error { font-size: 12px; color: #e74c3c; min-height: 16px; text-align: center; }
+
+        /* ── Waiting screen ── */
+        .room-code {
+            font-size: 44px; font-weight: 800; color: #fff;
+            letter-spacing: 10px;
+            text-shadow: 0 0 30px rgba(74,158,255,0.5);
+        }
+        .spinner {
+            width: 22px; height: 22px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top-color: #4a9eff;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .player-row {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; color: rgba(255,255,255,0.55); padding: 4px 0;
+        }
+        .player-row .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .player-row.you  { color: rgba(255,255,255,0.85); font-weight: 600; }
+
+        /* ── Setup (config per player) ── */
+        .ball-choice { display: flex; gap: 14px; }
+        .ball-btn {
+            width: 96px; height: 86px; border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04); cursor: pointer;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 9px;
+            font-size: 11px; font-weight: 700; letter-spacing: 1px;
+            color: rgba(255,255,255,0.45);
+            transition: border-color .15s, background .15s, transform .1s;
+        }
+        .ball-btn:hover { background: rgba(255,255,255,0.09); transform: translateY(-2px); }
+        .ball-btn.yellow { color: #f1c40f; } .ball-btn.yellow.selected { border-color: #f1c40f; background: rgba(255,255,255,0.1); }
+        .ball-btn.red    { color: #e74c3c; } .ball-btn.red.selected    { border-color: #e74c3c; background: rgba(255,255,255,0.1); }
+        .ball-circle { width: 28px; height: 28px; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .ball-btn.yellow .ball-circle { background: #f1c40f; }
+        .ball-btn.red    .ball-circle { background: #e74c3c; }
+
+        .score-opts { display: flex; gap: 8px; }
+        .score-opt {
+            width: 54px; height: 42px; border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,0.13); background: transparent;
+            color: rgba(255,255,255,0.45); font-size: 16px; font-weight: 700; cursor: pointer;
+            transition: border-color .15s, color .15s, background .15s;
+        }
+        .score-opt:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); }
+        .score-opt.selected { border-color: #4a9eff; background: rgba(74,158,255,0.12); color: #4a9eff; }
+
+        .start-btn {
+            width: 100%; height: 50px; border-radius: 12px; border: none;
+            background: linear-gradient(135deg,#4a9eff,#2d7adf);
+            color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 2.5px;
+            text-transform: uppercase; cursor: pointer;
+            box-shadow: 0 4px 20px rgba(74,158,255,0.3);
+            transition: transform .12s, box-shadow .12s, opacity .15s;
+        }
+        .start-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(74,158,255,0.45); }
+        .start-btn:disabled { opacity: 0.45; transform: none; cursor: not-allowed; }
+
+        /* ── Win card ── */
+        .win-card {
+            background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.11);
+            border-radius: 22px; padding: 52px 72px;
+            display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center;
+        }
+        .win-crown { font-size: 44px; }
+        .win-super { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+        .win-name  { font-size: 36px; font-weight: 700; color: #f1c40f; }
+        .win-final { font-size: 22px; font-weight: 300; color: rgba(255,255,255,0.45); letter-spacing: 4px; }
+        .replay-btn {
+            margin-top: 10px; padding: 13px 36px; border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,0.18); background: transparent;
+            color: rgba(255,255,255,0.6); font-size: 12px; font-weight: 600;
+            letter-spacing: 2.5px; text-transform: uppercase; cursor: pointer;
+            transition: border-color .15s, color .15s, background .15s;
+        }
+        .replay-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; background: rgba(255,255,255,0.06); }
+
+        /* ── Scoreboard ── */
+        #scoreboard {
+            display: flex; margin-bottom: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 18px; overflow: hidden;
+        }
+        .p-card {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 14px 40px; gap: 3px; min-width: 150px;
+            background: rgba(255,255,255,0.04); position: relative;
+            transition: background .3s;
+        }
+        .p-card.active { background: rgba(255,255,255,0.09); }
+        .p-card::after {
+            content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+            height: 2px; border-radius: 1px; background: currentColor;
+            opacity: 0; transition: opacity .3s;
+        }
+        .p-card.active::after { opacity: 0.55; }
+        .p-card + .p-card { border-left: 1px solid rgba(255,255,255,0.1); }
+        .p-label { display: flex; align-items: center; gap: 6px; font-size: 9px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+        .p-dot   { width: 9px; height: 9px; border-radius: 50%; }
+        .p-value {
+            font-size: 34px; font-weight: 700; color: #fff; line-height: 1;
+            transition: transform .13s cubic-bezier(0.34,1.56,0.64,1), color .13s;
+            min-width: 2ch; text-align: center;
+        }
+        .p-value.bump { transform: scale(1.45); color: #f1c40f; }
+        .p-name  { font-size: 9px; color: rgba(255,255,255,0.22); letter-spacing: 1px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .p-turn  { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0; transition: opacity .3s; }
+        .p-card.active .p-turn { opacity: 0.55; animation: pulse 1.4s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.7);opacity:.9} }
+
+        #target-display { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.18); margin-bottom: 12px; }
+
+        /* ── Game row ── */
+        #game-row { display: flex; align-items: center; gap: 22px; }
+
+        canvas {
+            border: 10px solid #5c4033; border-radius: 12px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 16px 50px rgba(0,0,0,0.9);
+            cursor: crosshair; display: block; flex-shrink: 0;
+        }
+        canvas.waiting-cursor { cursor: wait; }
+
+        /* ── Spin widget ── */
+        #spin-widget { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 90px; }
+        .sw-label    { font-size: 8px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+        #spin-zone {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.2) 0%, rgba(150,150,150,0.07) 45%, rgba(0,0,0,0.18) 100%);
+            border: 2px solid rgba(255,255,255,0.22);
+            box-shadow: inset 0 2px 6px rgba(255,255,255,0.1), inset 0 -3px 6px rgba(0,0,0,0.25), 0 4px 16px rgba(0,0,0,0.4);
+            position: relative; cursor: crosshair; overflow: hidden;
+        }
+        #spin-zone::before {
+            content: ''; position: absolute; top: 12%; left: 18%;
+            width: 22px; height: 13px;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.45) 0%, transparent 70%);
+            border-radius: 50%; transform: rotate(-25deg); pointer-events: none;
+        }
+        .sw-h { position: absolute; top: 50%; left: 8%; right: 8%; height: 1px; background: rgba(255,255,255,0.14); transform: translateY(-50%); pointer-events: none; }
+        .sw-v { position: absolute; left: 50%; top: 8%; bottom: 8%; width: 1px; background: rgba(255,255,255,0.14); transform: translateX(-50%); pointer-events: none; }
+        #spin-dot {
+            width: 14px; height: 14px; border-radius: 50%; background: #fff;
+            box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 2px 4px rgba(0,0,0,0.4);
+            position: absolute; transform: translate(-50%,-50%);
+            left: 50%; top: 50%; pointer-events: none;
+            transition: background .3s, box-shadow .3s;
+        }
+        .sw-badge { position: absolute; font-size: 7px; letter-spacing: 1px; color: rgba(255,255,255,0.25); text-transform: uppercase; pointer-events: none; font-weight: 600; }
+        .sw-badge.top    { top: 6px;   left: 50%; transform: translateX(-50%); }
+        .sw-badge.bottom { bottom: 5px; left: 50%; transform: translateX(-50%); }
+        .sw-badge.left   { left: 5px;   top: 50%;  transform: translateY(-50%); }
+        .sw-badge.right  { right: 5px;  top: 50%;  transform: translateY(-50%); }
+        #spin-name { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: .5px; text-align: center; min-height: 14px; font-weight: 500; }
+
+        /* ── Message ── */
+        #message {
+            height: 26px; margin-top: 14px;
+            font-size: 12px; font-weight: 700; letter-spacing: 4px;
+            text-transform: uppercase; text-align: center;
+            opacity: 0; transform: translateY(5px);
+            transition: opacity .22s ease, transform .22s ease;
+        }
+        #message.show { opacity: 1; transform: translateY(0); }
+
+        /* ── Opponent turn banner ── */
+        #opp-banner {
+            position: absolute; inset: 0; border-radius: 2px;
+            pointer-events: none; display: none;
+            background: repeating-linear-gradient(
+                -45deg,
+                transparent, transparent 8px,
+                rgba(0,0,0,0.04) 8px, rgba(0,0,0,0.04) 16px
+            );
+        }
+    </style>
+
+    <!-- Socket.io served by our Express server -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+
+    <!-- ══ 1. LOBBY ══ -->
+    <div class="overlay" id="lobby-overlay">
+        <div class="modal-card">
+            <div class="modal-title">🎱 Billar Francés</div>
+
+            <div style="width:100%;display:flex;flex-direction:column;gap:8px">
+                <input class="lb-input" id="lb-name" placeholder="Tu nombre" maxlength="20" />
+            </div>
+
+            <div style="width:100%;display:flex;flex-direction:column;gap:12px">
+                <button class="lb-btn" style="width:100%" onclick="createRoom()">Crear sala</button>
+
+                <div class="lb-divider">o únete</div>
+
+                <div style="display:flex;gap:8px;width:100%">
+                    <input class="lb-input code-input" id="lb-code" placeholder="ABCD" maxlength="4" />
+                    <button class="lb-btn" style="flex:1" onclick="joinRoom()">Unirse</button>
+                </div>
+            </div>
+
+            <div class="lb-error" id="lb-error"></div>
+
+            <div class="lb-divider">o juega sin conexión</div>
+            <button class="lb-btn outline" style="width:100%" onclick="playLocal()">Jugar en local</button>
+        </div>
+    </div>
+
+    <!-- ══ 2. WAITING (after create / join) ══ -->
+    <div class="overlay hidden" id="waiting-overlay">
+        <div class="modal-card" style="min-width:340px;gap:20px">
+            <div class="modal-sub" id="wait-label">Sala creada</div>
+            <div class="room-code" id="wait-code">????</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.35);letter-spacing:1px" id="wait-hint">Comparte el código con tu rival</div>
+
+            <div style="display:flex;flex-direction:column;gap:6px;width:100%" id="wait-players">
+                <!-- filled by JS -->
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.35);font-size:12px" id="wait-status">
+                <div class="spinner"></div>
+                <span id="wait-status-text">Esperando al rival...</span>
+            </div>
+
+            <button class="lb-btn outline" style="width:100%" onclick="cancelRoom()">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- ══ 3. SETUP ══ -->
+    <div class="overlay hidden" id="setup-overlay">
+        <div class="modal-card">
+            <div class="modal-title" id="setup-title">Billar Francés</div>
+
+            <!-- P1 online: chooses target score -->
+            <div id="setup-p1" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%">
+                <div class="modal-sub">Puntos para ganar</div>
+                <div class="score-opts">
+                    <button class="score-opt selected" data-pts="10"  onclick="selectPts(10)">10</button>
+                    <button class="score-opt"          data-pts="15"  onclick="selectPts(15)">15</button>
+                    <button class="score-opt"          data-pts="20"  onclick="selectPts(20)">20</button>
+                    <button class="score-opt"          data-pts="25"  onclick="selectPts(25)">25</button>
+                </div>
+                <button class="start-btn" id="p1-ready-btn" onclick="p1Confirm()">Confirmar</button>
+            </div>
+
+            <!-- P2 online: chooses ball -->
+            <div id="setup-p2" style="display:none;flex-direction:column;align-items:center;gap:12px;width:100%">
+                <div class="modal-sub">Elige tu bola</div>
+                <div class="ball-choice">
+                    <button class="ball-btn yellow selected" onclick="selectBall('yellow')">
+                        <div class="ball-circle"></div>AMARILLA
+                    </button>
+                    <button class="ball-btn red" onclick="selectBall('red')">
+                        <div class="ball-circle"></div>ROJA
+                    </button>
+                </div>
+                <button class="start-btn" id="p2-ready-btn" onclick="p2Confirm()">Confirmar</button>
+            </div>
+
+            <!-- LOCAL: full config -->
+            <div id="setup-local" style="display:none;flex-direction:column;align-items:center;gap:20px;width:100%">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
+                    <div class="modal-sub">Jugador 2 elige su bola</div>
+                    <div class="ball-choice">
+                        <button class="ball-btn yellow selected" onclick="selectBall('yellow')">
+                            <div class="ball-circle"></div>AMARILLA
+                        </button>
+                        <button class="ball-btn red" onclick="selectBall('red')">
+                            <div class="ball-circle"></div>ROJA
+                        </button>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
+                    <div class="modal-sub">Puntos para ganar</div>
+                    <div class="score-opts">
+                        <button class="score-opt selected" data-pts="10"  onclick="selectPts(10)">10</button>
+                        <button class="score-opt"          data-pts="15"  onclick="selectPts(15)">15</button>
+                        <button class="score-opt"          data-pts="20"  onclick="selectPts(20)">20</button>
+                        <button class="score-opt"          data-pts="25"  onclick="selectPts(25)">25</button>
+                    </div>
+                </div>
+                <button class="start-btn" onclick="startLocalGame()">Comenzar partida</button>
+            </div>
+
+            <!-- Waiting for the other player's confirmation -->
+            <div id="setup-waiting" style="display:none;flex-direction:column;align-items:center;gap:12px">
+                <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.4);font-size:13px">
+                    <div class="spinner"></div>
+                    <span id="setup-wait-text">Esperando al rival...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ 4. DISCONNECT ══ -->
+    <div class="overlay hidden" id="disconnect-overlay">
+        <div class="modal-card" style="gap:16px">
+            <div style="font-size:32px">📡</div>
+            <div class="modal-title">Rival desconectado</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.4);text-align:center">Tu rival abandonó la partida.</div>
+            <button class="lb-btn" style="width:100%;margin-top:8px" onclick="goToLobby()">Volver al lobby</button>
+        </div>
+    </div>
+
+    <!-- ══ 5. WIN ══ -->
+    <div class="overlay hidden" id="win-overlay">
+        <div class="win-card">
+            <div class="win-crown">🏆</div>
+            <div class="win-super">¡ Ganador !</div>
+            <div class="win-name"  id="win-name">Jugador 1</div>
+            <div class="win-final" id="win-final">10 – 7</div>
+            <button class="replay-btn" onclick="goToLobby()">Nueva partida</button>
+        </div>
+    </div>
+
+    <!-- ══ GAME UI ══ -->
+    <div id="scoreboard">
+        <div class="p-card active" id="p1-card" style="color:#d8d8d8">
+            <div class="p-label"><span class="p-dot" style="background:#f0f0f0"></span>JUGADOR 1</div>
+            <div class="p-value" id="p1-score">0</div>
+            <div class="p-name"  id="p1-name"></div>
+            <div class="p-turn"></div>
+        </div>
+        <div class="p-card" id="p2-card" style="color:#f1c40f">
+            <div class="p-label"><span class="p-dot" id="p2-dot" style="background:#f1c40f"></span>JUGADOR 2</div>
+            <div class="p-value" id="p2-score">0</div>
+            <div class="p-name"  id="p2-name"></div>
+            <div class="p-turn"></div>
+        </div>
+    </div>
+    <div id="target-display">META: 10 CARAMBOLAS</div>
+
+    <div id="game-row">
+        <div style="position:relative">
+            <canvas id="gameCanvas"></canvas>
+            <div id="opp-banner"></div>
+        </div>
+
+        <div id="spin-widget">
+            <div class="sw-label">Efecto del taco</div>
+            <div id="spin-zone">
+                <div class="sw-h"></div>
+                <div class="sw-v"></div>
+                <span class="sw-badge top">SEG</span>
+                <span class="sw-badge bottom">RET</span>
+                <span class="sw-badge left">IZQ</span>
+                <span class="sw-badge right">DER</span>
+                <div id="spin-dot"></div>
+            </div>
+            <div id="spin-name">Centro</div>
+        </div>
+    </div>
+    <div id="message"></div>
+
+<script>
+const { Engine, Render, Runner, Bodies, Composite, Body, Events, Resolver } = Matter;
+
+// ══ Network state ══════════════════════════════════════════════════════════
+const net = {
+    socket:       null,
+    mode:         'local',   // 'local' | 'online'
+    myNumber:     null,      // 1 or 2
+    myName:       '',
+    opponentName: '',
+    roomCode:     null
+};
+
+// ══ Config ════════════════════════════════════════════════════════════════
+const cfg = { p2Ball: 'yellow', targetScore: 10 };
+
+// ══ Game state ════════════════════════════════════════════════════════════
+const gs = {
+    phase: 'lobby',
+    currentPlayer: 1,
+    scores: { 1: 0, 2: 0 }
+};
+let pendingScoreEval = false;
+let hasStartedMoving  = false;
+let hitA = false, hitB = false;
+
+// ══ Spin state ════════════════════════════════════════════════════════════
+let spinX = 0, spinY = 0;
+let spinApplied = false;
+let pendingSpin = null;
+
+// ══ Physics ═══════════════════════════════════════════════════════════════
+const engine = Engine.create();
+engine.gravity.x = 0; engine.gravity.y = 0;
+Resolver._restingThresh = 0.001;
+
+const render = Render.create({
+    canvas: document.getElementById('gameCanvas'), engine,
+    options: { width: 800, height: 400, wireframes: false, background: '#0a6c3a' }
+});
+
+const radius = 15;
+const ballBase = { restitution: 0.97, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
+
+const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { fillStyle: '#f0f0f0' } });
+const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { fillStyle: '#f1c40f' } });
+const ballRed    = Bodies.circle(600, 250, radius, { ...ballBase, label: 'red',    render: { fillStyle: '#e74c3c' } });
+
+const wO = { isStatic: true, restitution: 1, friction: 0, frictionStatic: 0, render: { fillStyle: '#1e4d2b' } };
+Composite.add(engine.world, [
+    ballWhite, ballYellow, ballRed,
+    Bodies.rectangle(400,   5, 800,  10, wO),
+    Bodies.rectangle(400, 395, 800,  10, wO),
+    Bodies.rectangle(  5, 200,  10, 400, wO),
+    Bodies.rectangle(795, 200,  10, 400, wO)
+]);
+
+Render.run(render);
+Runner.run(Runner.create(), engine);
+
+// ══ Helpers ═══════════════════════════════════════════════════════════════
+function getCueBall() {
+    if (gs.currentPlayer === 1) return ballWhite;
+    return cfg.p2Ball === 'yellow' ? ballYellow : ballRed;
+}
+function getTargets() {
+    if (gs.currentPlayer === 1) return [ballYellow, ballRed];
+    if (cfg.p2Ball === 'yellow') return [ballWhite, ballRed];
+    return [ballWhite, ballYellow];
+}
+function isMyTurn() {
+    return net.mode === 'local' || gs.currentPlayer === net.myNumber;
+}
+function ballByLabel(label) {
+    return label === 'white' ? ballWhite : label === 'yellow' ? ballYellow : ballRed;
+}
+function allBallsStopped() {
+    return ballWhite.speed < 0.08 && ballYellow.speed < 0.08 && ballRed.speed < 0.08;
+}
+function syncPositions(pos) {
+    for (const [label, p] of Object.entries(pos)) {
+        const b = ballByLabel(label);
+        Body.setPosition(b, { x: p.x, y: p.y });
+        Body.setVelocity(b, { x: 0, y: 0 });
+    }
+}
+function currentPositions() {
+    return {
+        white:  { x: ballWhite.position.x,  y: ballWhite.position.y },
+        yellow: { x: ballYellow.position.x, y: ballYellow.position.y },
+        red:    { x: ballRed.position.x,    y: ballRed.position.y }
+    };
+}
+
+// ══ Pre-collision velocity snapshot ═══════════════════════════════════════
+const prevVel = {};
+Events.on(engine, 'beforeUpdate', () => {
+    for (const b of [ballWhite, ballYellow, ballRed])
+        prevVel[b.id] = { x: b.velocity.x, y: b.velocity.y };
+});
+
+// ══ Collision detection ════════════════════════════════════════════════════
+Events.on(engine, 'collisionStart', (event) => {
+    if (!pendingScoreEval || gs.phase !== 'playing') return;
+    const cue = getCueBall();
+    const [tA, tB] = getTargets();
+
+    for (const { bodyA, bodyB } of event.pairs) {
+        if (bodyA !== cue && bodyB !== cue) continue;
+        const target = bodyA === cue ? bodyB : bodyA;
+        if (target !== tA && target !== tB) continue;
+        const cv = prevVel[cue.id];
+        if (!cv) continue;
+        const dot = cv.x * (target.position.x - cue.position.x) +
+                    cv.y * (target.position.y - cue.position.y);
+        if (dot <= 0) continue;
+
+        if (target === tA) hitA = true;
+        if (target === tB) hitB = true;
+
+        if (!spinApplied && (Math.abs(spinX) > 0.08 || Math.abs(spinY) > 0.08)) {
+            spinApplied = true;
+            pendingSpin = { ball: cue, preVX: cv.x, preVY: cv.y };
+        }
+    }
+});
+
+// ══ After-update: spin + score evaluation ═════════════════════════════════
+Events.on(engine, 'afterUpdate', () => {
+    // Apply queued spin via setVelocity (one tick after collision, so solver is settled)
+    if (pendingSpin) {
+        const { ball, preVX, preVY } = pendingSpin;
+        pendingSpin = null;
+        const spd = Math.hypot(preVX, preVY);
+        if (spd > 0.1) {
+            const dvx = preVX / spd, dvy = preVY / spd;
+            const str = spd * 0.9;
+            Body.setVelocity(ball, {
+                x: ball.velocity.x + dvx * spinY * str + (-dvy) * spinX * str * 0.65,
+                y: ball.velocity.y + dvy * spinY * str + ( dvx) * spinX * str * 0.65
+            });
+        }
+    }
+
+    if (!pendingScoreEval || gs.phase !== 'playing') return;
+
+    // Movement detection
+    if (!hasStartedMoving) {
+        if (ballWhite.speed > 0.35 || ballYellow.speed > 0.35 || ballRed.speed > 0.35)
+            hasStartedMoving = true;
+        return;
+    }
+
+    if (!allBallsStopped()) return;
+
+    // ── Online: only the shooter evaluates and sends result ──
+    if (net.mode === 'online' && !isMyTurn()) {
+        // Viewer: wait for shot-settled from server.
+        // (pendingScoreEval cleared when shot-settled arrives)
+        return;
+    }
+
+    // ── Evaluate ──
+    pendingScoreEval = false;
+    hasStartedMoving = false;
+    const scored = hitA && hitB;
+    const scorer = scored ? gs.currentPlayer : null;
+    hitA = hitB = false;
+
+    if (scored) {
+        gs.scores[gs.currentPlayer]++;
+        bumpScore(gs.currentPlayer);
+        showMessage('¡ Carambola !', 'hit');
+        // currentPlayer stays the same (scored → same player continues)
+    } else {
+        gs.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
+        updateTurnUI();
+        showMessage(`Fallo — turno del J${gs.currentPlayer}`, 'miss');
+    }
+
+    // ── Online: broadcast result to opponent ──
+    if (net.mode === 'online') {
+        net.socket.emit('shot-settled', {
+            positions: currentPositions(),
+            scored,
+            scorer,
+            scores: { ...gs.scores },
+            nextPlayer: gs.currentPlayer
+        });
+    }
+
+    if (gs.scores[gs.currentPlayer === 1 ? (scored ? 1 : 2) : (scored ? 2 : 1)] >= cfg.targetScore ||
+        gs.scores[1] >= cfg.targetScore || gs.scores[2] >= cfg.targetScore) {
+        setTimeout(showWinner, 900);
+    }
+    updateTurnCursor();
+});
+
+// ══ Shoot logic ════════════════════════════════════════════════════════════
+const MIN_PX = 25, MAX_FORCE = 3, PWR = 0.04;
+let isDragging = false;
+let mPos = { x: 0, y: 0 };
+const cvs = render.canvas;
+
+cvs.addEventListener('mousedown', (e) => {
+    if (gs.phase !== 'playing' || pendingScoreEval) return;
+    if (!isMyTurn()) return;
+    if (ballWhite.speed > 0.1 || ballYellow.speed > 0.1 || ballRed.speed > 0.1) return;
+    isDragging = true; snapMouse(e);
+});
+window.addEventListener('mousemove', (e) => { if (isDragging) snapMouse(e); });
+window.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (!isMyTurn()) return;
+
+    const cb = getCueBall();
+    const dx = cb.position.x - mPos.x, dy = cb.position.y - mPos.y;
+    if (Math.hypot(dx, dy) < MIN_PX) return;
+
+    for (const b of [ballWhite, ballYellow, ballRed]) b.frictionAir = 0.011;
+    cb.frictionAir = Math.max(0.004, Math.min(0.022, 0.011 - spinY * 0.007));
+
+    let fx = dx * PWR, fy = dy * PWR;
+    const m = Math.hypot(fx, fy);
+    if (m > MAX_FORCE) { fx = fx/m*MAX_FORCE; fy = fy/m*MAX_FORCE; }
+
+    // ── Online: send shot params BEFORE applying locally ──
+    if (net.mode === 'online') {
+        net.socket.emit('shoot', {
+            startPos: currentPositions(),
+            force: { x: fx, y: fy },
+            spin:  { x: spinX, y: spinY },
+            cueLabel: cb.label
+        });
+    }
+
+    fireShot(cb, { x: fx, y: fy });
+});
+
+function fireShot(cueBall, force) {
+    pendingScoreEval = true;
+    hasStartedMoving = false;
+    hitA = hitB = false;
+    spinApplied = false;
+    pendingSpin = null;
+    Body.applyForce(cueBall, cueBall.position, force);
+    updateTurnCursor();
+}
+
+function snapMouse(e) {
+    const r = cvs.getBoundingClientRect();
+    mPos.x = e.clientX - r.left; mPos.y = e.clientY - r.top;
+}
+
+// ══ Canvas aiming render ═══════════════════════════════════════════════════
+const WX0 = 25, WX1 = 775, WY0 = 25, WY1 = 375;
+
+Events.on(render, 'afterRender', () => {
+    if (gs.phase !== 'playing') return;
+    const ctx = render.context;
+    const cb = getCueBall();
+    const [tA, tB] = getTargets();
+    const cx = cb.position.x, cy = cb.position.y;
+
+    if (!isDragging && !pendingScoreEval && cb.speed < 0.1 && isMyTurn()) {
+        ctx.beginPath(); ctx.arc(cx, cy, radius+5, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2; ctx.stroke();
+        for (const t of [tA, tB]) {
+            ctx.beginPath(); ctx.arc(t.position.x, t.position.y, radius+5, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(120,220,255,0.14)'; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+    }
+
+    if (!isDragging) return;
+
+    const aimVX = mPos.x-cx, aimVY = mPos.y-cy;
+    const aimMag = Math.hypot(aimVX, aimVY);
+    if (aimMag < 5) return;
+
+    const aNX = aimVX/aimMag, aNY = aimVY/aimMag;
+    const dirX = -aNX, dirY = -aNY;
+    const pRatio = Math.min(aimMag, 300)/300;
+    const aimCol = powerColor(pRatio);
+
+    const lim = Math.min(aimMag, 300);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+aNX*lim, cy+aNY*lim);
+    ctx.strokeStyle = aimCol; ctx.lineWidth = 4; ctx.setLineDash([5,10]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx+aNX*lim, cy+aNY*lim, 5, 0, Math.PI*2);
+    ctx.fillStyle = aimCol; ctx.fill();
+
+    const HD = radius*2;
+    let tx=cx,ty=cy,hitWall=false,hitObj=null,dist=0;
+    while (!hitWall && !hitObj && dist<1200) {
+        tx+=dirX; ty+=dirY; dist++;
+        if (tx<=WX0){tx=WX0;hitWall=true;break;} if(tx>=WX1){tx=WX1;hitWall=true;break;}
+        if (ty<=WY0){ty=WY0;hitWall=true;break;} if(ty>=WY1){ty=WY1;hitWall=true;break;}
+        if (Math.hypot(tx-tA.position.x,ty-tA.position.y)<=HD){hitObj=tA;break;}
+        if (Math.hypot(tx-tB.position.x,ty-tB.position.y)<=HD){hitObj=tB;break;}
+    }
+
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(tx,ty);
+    ctx.strokeStyle='rgba(255,255,255,0.78)';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
+    ctx.beginPath();ctx.arc(tx,ty,radius,0,Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.28)';ctx.lineWidth=1.5;ctx.stroke();
+
+    if (hitObj) {
+        ctx.beginPath();ctx.arc(hitObj.position.x,hitObj.position.y,radius+7,0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,240,80,0.5)';ctx.lineWidth=2;ctx.stroke();
+        const nX=hitObj.position.x-tx,nY=hitObj.position.y-ty;
+        const nM=Math.hypot(nX,nY),nuX=nX/nM,nuY=nY/nM;
+        const dot=dirX*nuX+dirY*nuY,bX=dirX-dot*nuX,bY=dirY-dot*nuY;
+        let predX=bX+dirX*spinY*0.82,predY=bY+dirY*spinY*0.82;
+        predX+=(-dirY)*spinX*0.82*0.55; predY+=(dirX)*spinX*0.82*0.55;
+        const pm=Math.hypot(predX,predY);
+        if(pm>0.01){predX/=pm;predY/=pm;}
+        const pc=spinY>0.2?'rgba(80,220,120,0.35)':spinY<-0.2?'rgba(255,100,80,0.35)':'rgba(255,255,255,0.22)';
+        ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx+predX*170,ty+predY*170);
+        ctx.strokeStyle=pc;ctx.lineWidth=2;ctx.setLineDash([3,7]);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(hitObj.position.x,hitObj.position.y);
+        ctx.lineTo(hitObj.position.x+nuX*70,hitObj.position.y+nuY*70);
+        ctx.strokeStyle='rgba(255,240,80,0.26)';ctx.lineWidth=1.5;ctx.stroke();
+        ctx.setLineDash([]);
+    } else if (hitWall) {
+        let rX=dirX,rY=dirY;
+        if(tx<=WX0||tx>=WX1)rX=-dirX; if(ty<=WY0||ty>=WY1)rY=-dirY;
+        ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx+rX*170,ty+rY*170);
+        ctx.strokeStyle='rgba(255,255,255,0.13)';ctx.lineWidth=1.5;ctx.setLineDash([3,7]);ctx.stroke();ctx.setLineDash([]);
+    }
+});
+
+// ══ Spin selector ═════════════════════════════════════════════════════════
+const ZONE_R    = 40;
+const spinZoneEl = document.getElementById('spin-zone');
+const spinDotEl  = document.getElementById('spin-dot');
+let isDraggingSpin = false;
+
+function setSpinDot(px, py) {
+    const d = Math.hypot(px, py), maxD = ZONE_R - 8;
+    if (d > maxD) { px = px/d*maxD; py = py/d*maxD; }
+    spinX =  px/maxD;
+    spinY = -py/maxD;
+    spinDotEl.style.left = (ZONE_R+px)+'px';
+    spinDotEl.style.top  = (ZONE_R+py)+'px';
+    updateSpinLabel();
+}
+function updateSpinLabel() {
+    const T=0.18, parts=[];
+    if (spinY>T) parts.push('Seguir'); else if (spinY<-T) parts.push('Retroceder');
+    if (spinX>T) parts.push('Inglés Der.'); else if (spinX<-T) parts.push('Inglés Izq.');
+    document.getElementById('spin-name').textContent = parts.length ? parts.join(' + ') : 'Centro';
+}
+spinZoneEl.addEventListener('mousedown', e => {
+    isDraggingSpin=true;
+    const r=spinZoneEl.getBoundingClientRect();
+    setSpinDot(e.clientX-r.left-ZONE_R, e.clientY-r.top-ZONE_R);
+    e.stopPropagation();
+});
+window.addEventListener('mousemove', e => {
+    if (!isDraggingSpin) return;
+    const r=spinZoneEl.getBoundingClientRect();
+    setSpinDot(e.clientX-r.left-ZONE_R, e.clientY-r.top-ZONE_R);
+});
+window.addEventListener('mouseup', () => { isDraggingSpin=false; });
+spinZoneEl.addEventListener('dblclick', () => setSpinDot(0,0));
+
+// ══ LOBBY UI functions ════════════════════════════════════════════════════
+function connectSocket() {
+    if (net.socket) return;
+    net.socket = io(window.location.origin);
+
+    net.socket.on('room-created', ({ code }) => {
+        net.roomCode = code;
+        net.mode = 'online';
+        showWaiting('Sala creada', code, `Comparte el código con tu rival`);
+        addWaitingPlayer(net.myName, true, '#f0f0f0');
+    });
+
+    net.socket.on('join-error', (msg) => {
+        document.getElementById('lb-error').textContent = msg;
+    });
+
+    net.socket.on('room-joined', ({ playerNumber, opponentName }) => {
+        net.myNumber = playerNumber; // 2
+        net.opponentName = opponentName;
+        net.mode = 'online';
+        showWaiting('Conectado', net.roomCode, `Rival: ${opponentName}`);
+        addWaitingPlayer(opponentName, false, '#f0f0f0');
+        addWaitingPlayer(net.myName, true, '#f1c40f');
+        // P2 moves directly to setup
+        setTimeout(() => showSetupOnline(), 600);
+    });
+
+    net.socket.on('opponent-joined', ({ name }) => {
+        net.opponentName = name;
+        // P1: opponent joined → show setup
+        document.getElementById('wait-status-text').textContent = `¡${name} se unió!`;
+        addWaitingPlayer(name, false, '#f1c40f');
+        setTimeout(() => showSetupOnline(), 800);
+    });
+
+    net.socket.on('game-start', ({ config }) => {
+        cfg.p2Ball       = config.p2Ball;
+        cfg.targetScore  = config.targetScore;
+        hideOverlay('setup-overlay');
+        beginGame();
+    });
+
+    net.socket.on('opponent-shoot', (data) => {
+        // Sync start positions and apply same shot on our end
+        syncPositions(data.startPos);
+        // Update spin values to match shooter's spin
+        spinX = data.spin.x; spinY = data.spin.y;
+        setSpinDot(spinX*(ZONE_R-8), -spinY*(ZONE_R-8));
+        // Reset friction for all balls
+        for (const b of [ballWhite, ballYellow, ballRed]) b.frictionAir = 0.011;
+        const cb = ballByLabel(data.cueLabel);
+        cb.frictionAir = Math.max(0.004, Math.min(0.022, 0.011 - data.spin.y * 0.007));
+        fireShot(cb, data.force);
+    });
+
+    net.socket.on('shot-settled', (data) => {
+        // Hard sync final positions
+        syncPositions(data.positions);
+        pendingScoreEval = false;
+        hasStartedMoving = false;
+        hitA = hitB = false;
+        gs.scores = data.scores;
+        document.getElementById('p1-score').textContent = data.scores[1];
+        document.getElementById('p2-score').textContent = data.scores[2];
+        if (data.scorer) bumpScore(data.scorer);
+        if (data.scored) showMessage('¡ Carambola !', 'hit');
+        else showMessage(`Fallo — turno del J${data.nextPlayer}`, 'miss');
+        gs.currentPlayer = data.nextPlayer;
+        updateTurnUI();
+        updateTurnCursor();
+        const w = data.scores[1] >= cfg.targetScore ? 1 : data.scores[2] >= cfg.targetScore ? 2 : 0;
+        if (w) { gs.currentPlayer = w; setTimeout(showWinner, 900); }
+    });
+
+    net.socket.on('opponent-left', () => {
+        gs.phase = 'ended';
+        showOverlay('disconnect-overlay');
+    });
+}
+
+function createRoom() {
+    const name = document.getElementById('lb-name').value.trim();
+    if (!name) { document.getElementById('lb-error').textContent = 'Escribe tu nombre'; return; }
+    net.myName   = name;
+    net.myNumber = 1;
+    connectSocket();
+    net.socket.emit('create-room', { name });
+}
+
+function joinRoom() {
+    const name = document.getElementById('lb-name').value.trim();
+    const code = document.getElementById('lb-code').value.trim().toUpperCase();
+    if (!name) { document.getElementById('lb-error').textContent = 'Escribe tu nombre'; return; }
+    if (code.length < 4) { document.getElementById('lb-error').textContent = 'Código de 4 caracteres'; return; }
+    net.myName   = name;
+    net.roomCode = code;
+    connectSocket();
+    net.socket.emit('join-room', { code, name });
+}
+
+function playLocal() {
+    net.mode = 'local';
+    hideOverlay('lobby-overlay');
+    showSetupLocal();
+}
+
+function cancelRoom() {
+    if (net.socket) { net.socket.disconnect(); net.socket = null; }
+    net.mode = 'local';
+    showOverlay('lobby-overlay');
+    hideOverlay('waiting-overlay');
+}
+
+function goToLobby() {
+    if (net.socket) { net.socket.disconnect(); net.socket = null; }
+    net.mode = 'local'; net.myNumber = null;
+    resetBalls();
+    gs.scores = {1:0,2:0}; gs.currentPlayer = 1; gs.phase = 'lobby';
+    document.getElementById('p1-score').textContent = '0';
+    document.getElementById('p2-score').textContent = '0';
+    for (const id of ['win-overlay','setup-overlay','waiting-overlay','disconnect-overlay']) hideOverlay(id);
+    showOverlay('lobby-overlay');
+}
+
+// ══ Setup flow ═════════════════════════════════════════════════════════════
+let _pts = 10, _p2ball = 'yellow';
+
+function selectBall(b) {
+    _p2ball = b;
+    document.querySelectorAll('.ball-btn').forEach(x => x.classList.remove('selected'));
+    document.querySelector('.ball-btn.'+b).classList.add('selected');
+}
+function selectPts(p) {
+    _pts = p;
+    document.querySelectorAll('.score-opt').forEach(x => x.classList.remove('selected'));
+    document.querySelector(`.score-opt[data-pts="${p}"]`).classList.add('selected');
+}
+
+function showSetupLocal() {
+    gs.phase = 'setup';
+    document.getElementById('setup-local').style.display = 'flex';
+    document.getElementById('setup-p1').style.display    = 'none';
+    document.getElementById('setup-p2').style.display    = 'none';
+    document.getElementById('setup-waiting').style.display = 'none';
+    document.getElementById('setup-title').textContent   = 'Billar Francés';
+    showOverlay('setup-overlay');
+}
+
+function showSetupOnline() {
+    gs.phase = 'setup';
+    hideOverlay('waiting-overlay');
+    document.getElementById('setup-local').style.display = 'none';
+    document.getElementById('setup-waiting').style.display = 'none';
+
+    if (net.myNumber === 1) {
+        document.getElementById('setup-title').textContent = 'Elige los puntos';
+        document.getElementById('setup-p1').style.display = 'flex';
+        document.getElementById('setup-p2').style.display = 'none';
+    } else {
+        document.getElementById('setup-title').textContent = 'Elige tu bola';
+        document.getElementById('setup-p1').style.display = 'none';
+        document.getElementById('setup-p2').style.display = 'flex';
+    }
+    showOverlay('setup-overlay');
+}
+
+function p1Confirm() {
+    document.getElementById('setup-p1').style.display = 'none';
+    document.getElementById('setup-waiting').style.display = 'flex';
+    document.getElementById('setup-wait-text').textContent = 'Esperando que J2 elija su bola...';
+    document.getElementById('p1-ready-btn').disabled = true;
+    net.socket.emit('p1-ready', { targetScore: _pts });
+}
+
+function p2Confirm() {
+    document.getElementById('setup-p2').style.display = 'none';
+    document.getElementById('setup-waiting').style.display = 'flex';
+    document.getElementById('setup-wait-text').textContent = 'Esperando confirmación de J1...';
+    document.getElementById('p2-ready-btn').disabled = true;
+    net.socket.emit('p2-ready', { p2Ball: _p2ball });
+}
+
+function startLocalGame() {
+    cfg.p2Ball = _p2ball; cfg.targetScore = _pts;
+    hideOverlay('setup-overlay');
+    beginGame();
+}
+
+// ══ Game start / reset ════════════════════════════════════════════════════
+function beginGame() {
+    gs.phase = 'playing';
+    gs.currentPlayer = 1;
+    gs.scores = { 1: 0, 2: 0 };
+    pendingScoreEval = hasStartedMoving = false;
+    hitA = hitB = false;
+
+    // Update scoreboard player labels
+    const p2Color = cfg.p2Ball === 'yellow' ? '#f1c40f' : '#e74c3c';
+    document.getElementById('p2-dot').style.background = p2Color;
+    document.getElementById('p2-card').style.color     = p2Color;
+    document.getElementById('target-display').textContent = `META: ${cfg.targetScore} CARAMBOLAS`;
+    document.getElementById('p1-score').textContent = '0';
+    document.getElementById('p2-score').textContent = '0';
+
+    // Show player names in scoreboard (online only)
+    if (net.mode === 'online') {
+        const [n1, n2] = net.myNumber === 1
+            ? [net.myName, net.opponentName]
+            : [net.opponentName, net.myName];
+        document.getElementById('p1-name').textContent = n1;
+        document.getElementById('p2-name').textContent = n2;
+    }
+
+    updateTurnUI();
+    updateTurnCursor();
+    resetBalls();
+}
+
+function resetBalls() {
+    for (const [b,x,y] of [[ballWhite,200,200],[ballYellow,600,150],[ballRed,600,250]]) {
+        Body.setPosition(b,{x,y}); Body.setVelocity(b,{x:0,y:0}); b.frictionAir=0.011;
+    }
+    pendingSpin = null; spinApplied = false;
+    setSpinDot(0, 0);
+}
+
+// ══ UI helpers ═════════════════════════════════════════════════════════════
+function updateTurnUI() {
+    document.getElementById('p1-card').classList.toggle('active', gs.currentPlayer === 1);
+    document.getElementById('p2-card').classList.toggle('active', gs.currentPlayer === 2);
+    const cb = getCueBall();
+    const dc = cb.label==='white'?'#ffffff':cb.label==='yellow'?'#f1c40f':'#e74c3c';
+    spinDotEl.style.background = dc;
+    spinDotEl.style.boxShadow  = `0 0 10px ${dc}cc, 0 2px 4px rgba(0,0,0,0.4)`;
+}
+
+function updateTurnCursor() {
+    const waiting = !isMyTurn() || pendingScoreEval;
+    cvs.classList.toggle('waiting-cursor', waiting);
+    document.getElementById('opp-banner').style.display = (!isMyTurn() && !pendingScoreEval) ? 'block' : 'none';
+}
+
+function bumpScore(player) {
+    const el = document.getElementById(`p${player}-score`);
+    el.textContent = gs.scores[player];
+    el.classList.remove('bump'); void el.offsetWidth;
+    el.classList.add('bump');
+    setTimeout(() => el.classList.remove('bump'), 220);
+}
+
+let msgTO = null;
+function showMessage(text, type) {
+    const el = document.getElementById('message');
+    el.textContent = text;
+    el.style.color = type==='hit' ? '#f1c40f' : 'rgba(255,110,60,0.9)';
+    el.style.textShadow = type==='hit'
+        ? '0 0 20px rgba(241,196,15,0.55)'
+        : '0 0 16px rgba(255,90,30,0.4)';
+    el.classList.add('show');
+    clearTimeout(msgTO);
+    msgTO = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+function showWinner() {
+    gs.phase = 'ended';
+    const winner = gs.scores[1] >= cfg.targetScore ? 1 : 2;
+    const name = net.mode === 'online'
+        ? (winner === net.myNumber ? net.myName : net.opponentName)
+        : `Jugador ${winner}`;
+    document.getElementById('win-name').textContent = name;
+    document.getElementById('win-final').textContent = `${gs.scores[1]}  —  ${gs.scores[2]}`;
+    showOverlay('win-overlay');
+}
+
+function powerColor(t) {
+    const r=t<0.5?Math.round(255*t*2):255, g=t<0.5?210:Math.round(210*(1-(t-0.5)*2));
+    return `rgba(${r},${g},30,0.85)`;
+}
+
+function showOverlay(id)  { const o=document.getElementById(id); o.style.display='flex'; requestAnimationFrame(()=>requestAnimationFrame(()=>o.classList.remove('hidden'))); }
+function hideOverlay(id)  { const o=document.getElementById(id); o.classList.add('hidden'); setTimeout(()=>o.style.display='none',380); }
+
+// ── Waiting screen helpers ──
+function showWaiting(label, code, hint) {
+    document.getElementById('wait-label').textContent = label;
+    document.getElementById('wait-code').textContent  = code;
+    document.getElementById('wait-hint').textContent  = hint;
+    document.getElementById('wait-players').innerHTML = '';
+    hideOverlay('lobby-overlay');
+    showOverlay('waiting-overlay');
+}
+function addWaitingPlayer(name, isYou, color) {
+    const row = document.createElement('div');
+    row.className = 'player-row' + (isYou?' you':'');
+    row.style.color = isYou ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)';
+    row.innerHTML = `<span class="dot" style="background:${color}"></span>
+                     ${name}${isYou?' <span style="font-size:10px;color:rgba(255,255,255,0.3)">(tú)</span>':''}`;
+    document.getElementById('wait-players').appendChild(row);
+}
+</script>
+</body>
+</html>
