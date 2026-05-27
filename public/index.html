@@ -785,62 +785,111 @@ const FW  = 20; // frame width (px)
 let lerpAX = null, lerpAY = null; // smoothed aim position
 
 function drawTableFrame(ctx) {
-    // Felt re-surface (clean green, slightly lighter in center)
-    const fg = ctx.createRadialGradient(400,200,40,400,200,420);
-    fg.addColorStop(0,   '#1f7d42');
-    fg.addColorStop(0.7, '#1a7040');
-    fg.addColorStop(1,   '#155e35');
+    // ── 1. Madera: UN solo rectángulo 800×400 con gradiente diagonal ─────────
+    //    Las esquinas quedan rellenas de forma natural, sin juntas visibles.
+    ctx.fillStyle = '#2a1003';
+    ctx.fillRect(0, 0, 800, 400);
+
+    const wg = ctx.createLinearGradient(0, 0, 800, 400);
+    wg.addColorStop(0.00, 'rgba(30,10,2,0.95)');
+    wg.addColorStop(0.15, 'rgba(140,72,18,0.9)');
+    wg.addColorStop(0.28, 'rgba(205,128,50,0.85)');
+    wg.addColorStop(0.42, 'rgba(230,155,68,0.8)');
+    wg.addColorStop(0.55, 'rgba(195,115,40,0.82)');
+    wg.addColorStop(0.70, 'rgba(155,85,22,0.87)');
+    wg.addColorStop(0.84, 'rgba(210,138,55,0.8)');
+    wg.addColorStop(1.00, 'rgba(50,18,3,0.95)');
+    ctx.fillStyle = wg;
+    ctx.fillRect(0, 0, 800, 400);
+
+    // Bisel: aristas superiores/izquierdas más claras, inferiores/derechas más oscuras
+    const tg = ctx.createLinearGradient(0, 0, 0, FW);
+    tg.addColorStop(0, 'rgba(255,205,105,0.55)');
+    tg.addColorStop(1, 'rgba(255,205,105,0)');
+    ctx.fillStyle = tg; ctx.fillRect(0, 0, 800, FW);
+
+    const lg = ctx.createLinearGradient(0, 0, FW, 0);
+    lg.addColorStop(0, 'rgba(255,205,105,0.38)');
+    lg.addColorStop(1, 'rgba(255,205,105,0)');
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, FW, 400);
+
+    const bg_s = ctx.createLinearGradient(0, 400-FW, 0, 400);
+    bg_s.addColorStop(0, 'rgba(0,0,0,0)');
+    bg_s.addColorStop(1, 'rgba(0,0,0,0.52)');
+    ctx.fillStyle = bg_s; ctx.fillRect(0, 400-FW, 800, FW);
+
+    const rg_s = ctx.createLinearGradient(800-FW, 0, 800, 0);
+    rg_s.addColorStop(0, 'rgba(0,0,0,0)');
+    rg_s.addColorStop(1, 'rgba(0,0,0,0.52)');
+    ctx.fillStyle = rg_s; ctx.fillRect(800-FW, 0, FW, 400);
+
+    // ── 2. Banda de cushion (goma verde entre madera y paño) ─────────────────
+    const CR = 6;           // grosor del cushion
+    const cx = FW - CR;     // empieza justo dentro del marco
+    ctx.fillStyle = '#12502a';
+    ctx.fillRect(cx, cx, 800-cx*2, 400-cx*2);
+
+    // Cushion: línea de luz en borde superior/izquierdo
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#3a9652';
+    ctx.fillRect(cx, cx, 800-cx*2, 1.5);
+    ctx.fillRect(cx, cx, 1.5, 400-cx*2);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(cx, 400-cx-1.5, 800-cx*2, 1.5);
+    ctx.fillRect(800-cx-1.5, cx, 1.5, 400-cx*2);
+    ctx.restore();
+
+    // ── 3. Paño / felt ───────────────────────────────────────────────────────
+    const fg = ctx.createRadialGradient(400, 200, 35, 400, 200, 420);
+    fg.addColorStop(0,   '#237a46');
+    fg.addColorStop(0.6, '#1d7040');
+    fg.addColorStop(1,   '#165c34');
     ctx.fillStyle = fg;
     ctx.fillRect(FW, FW, 800-FW*2, 400-FW*2);
 
-    // Subtle felt texture (faint diamond crosshatch)
+    // Textura sutil del paño
     ctx.save();
-    ctx.globalAlpha = 0.04;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth   = 0.5;
+    ctx.globalAlpha = 0.038;
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.5;
     for (let x = FW; x < 800-FW; x += 18) {
-        ctx.beginPath(); ctx.moveTo(x,FW); ctx.lineTo(x,400-FW); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, FW); ctx.lineTo(x, 400-FW); ctx.stroke();
     }
     for (let y = FW; y < 400-FW; y += 18) {
-        ctx.beginPath(); ctx.moveTo(FW,y); ctx.lineTo(800-FW,y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(FW, y); ctx.lineTo(800-FW, y); ctx.stroke();
     }
     ctx.restore();
 
-    // Wooden frame — top rail
-    let wg = ctx.createLinearGradient(0,0,0,FW);
-    wg.addColorStop(0,'#3a1c07'); wg.addColorStop(0.45,'#9b6228'); wg.addColorStop(0.75,'#c8894a'); wg.addColorStop(1,'#7a4818');
-    ctx.fillStyle = wg; ctx.fillRect(0,0,800,FW);
+    // Sombra interior: da profundidad (cushion "elevado" sobre el paño)
+    const sh_t = ctx.createLinearGradient(0, FW, 0, FW+16);
+    sh_t.addColorStop(0, 'rgba(0,0,0,0.38)');
+    sh_t.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh_t; ctx.fillRect(FW, FW, 800-FW*2, 16);
 
-    // bottom rail
-    wg = ctx.createLinearGradient(0,400-FW,0,400);
-    wg.addColorStop(0,'#7a4818'); wg.addColorStop(0.25,'#c8894a'); wg.addColorStop(0.55,'#9b6228'); wg.addColorStop(1,'#3a1c07');
-    ctx.fillStyle = wg; ctx.fillRect(0,400-FW,800,FW);
+    const sh_l = ctx.createLinearGradient(FW, 0, FW+16, 0);
+    sh_l.addColorStop(0, 'rgba(0,0,0,0.28)');
+    sh_l.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh_l; ctx.fillRect(FW, FW, 16, 400-FW*2);
 
-    // left rail
-    wg = ctx.createLinearGradient(0,0,FW,0);
-    wg.addColorStop(0,'#3a1c07'); wg.addColorStop(0.45,'#9b6228'); wg.addColorStop(0.75,'#c8894a'); wg.addColorStop(1,'#7a4818');
-    ctx.fillStyle = wg; ctx.fillRect(0,FW,FW,400-FW*2);
+    // Borde nítido cushion→paño
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(FW - 0.75, FW - 0.75, 800-FW*2+1.5, 400-FW*2+1.5);
 
-    // right rail
-    wg = ctx.createLinearGradient(800-FW,0,800,0);
-    wg.addColorStop(0,'#7a4818'); wg.addColorStop(0.25,'#c8894a'); wg.addColorStop(0.55,'#9b6228'); wg.addColorStop(1,'#3a1c07');
-    ctx.fillStyle = wg; ctx.fillRect(800-FW,FW,FW,400-FW*2);
+    // Borde exterior del canvas
+    ctx.strokeStyle = 'rgba(255,185,85,0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(0.75, 0.75, 798.5, 398.5);
 
-    // Frame inner shadow
-    ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=2.5;
-    ctx.strokeRect(FW,FW,800-FW*2,400-FW*2);
-    // Frame outer highlight
-    ctx.strokeStyle='rgba(220,150,70,0.28)'; ctx.lineWidth=1;
-    ctx.strokeRect(1,1,798,398);
-
-    // ── Diamond guides ──────────────────────────────────────────────────────
-    const iW = 800-FW*2, iH = 400-FW*2;           // interior size
-    const xD = [FW+iW*0.25, FW+iW*0.5, FW+iW*0.75]; // 3 per long rail
-    const yD = [FW+iH/3, FW+iH*2/3];               // 2 per short rail
-    const d_y = FW*0.5, d_yb = 400-FW*0.5;
-    const d_x = FW*0.5, d_xr = 800-FW*0.5;
-    for (const x of xD) { drawDiamond(ctx,x,d_y); drawDiamond(ctx,x,d_yb); }
-    for (const y of yD) { drawDiamond(ctx,d_x,y); drawDiamond(ctx,d_xr,y); }
+    // ── 4. Diamantes en el cushion ───────────────────────────────────────────
+    const iW = 800-FW*2, iH = 400-FW*2;
+    const xD = [FW+iW*0.25, FW+iW*0.5, FW+iW*0.75];
+    const yD = [FW+iH/3, FW+iH*2/3];
+    const dmCY = cx + CR*0.5, dmCYb = 400-cx-CR*0.5;
+    const dmCX = cx + CR*0.5, dmCXr = 800-cx-CR*0.5;
+    for (const x of xD) { drawDiamond(ctx,x,dmCY); drawDiamond(ctx,x,dmCYb); }
+    for (const y of yD) { drawDiamond(ctx,dmCX,y); drawDiamond(ctx,dmCXr,y); }
 }
 
 function drawDiamond(ctx, x, y) {
