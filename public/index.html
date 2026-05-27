@@ -545,10 +545,10 @@ const ballRed    = Bodies.circle(600, 250, radius, { ...ballBase, label: 'red', 
 const wO = { isStatic: true, restitution: 1, friction: 0, frictionStatic: 0, render: { visible: false } };
 Composite.add(engine.world, [
     ballWhite, ballYellow, ballRed,
-    Bodies.rectangle(400,   5, 800,  10, wO),
-    Bodies.rectangle(400, 395, 800,  10, wO),
-    Bodies.rectangle(  5, 200,  10, 400, wO),
-    Bodies.rectangle(795, 200,  10, 400, wO)
+    Bodies.rectangle(400,  15, 800,  30, wO),
+    Bodies.rectangle(400, 385, 800,  30, wO),
+    Bodies.rectangle( 15, 200,  30, 400, wO),
+    Bodies.rectangle(785, 200,  30, 400, wO)
 ]);
 
 Render.run(render);
@@ -780,8 +780,8 @@ function snapPointer(e) {
 }
 
 // ══ Table & ball visual rendering ═════════════════════════════════════════
-const WX0 = 25, WX1 = 775, WY0 = 25, WY1 = 375;
-const FW  = 20; // frame width (px)
+const WX0 = 45, WX1 = 755, WY0 = 45, WY1 = 355;
+const FW  = 30; // frame width (px)
 let lerpAX = null, lerpAY = null; // smoothed aim position
 
 function drawTableFrame(ctx) {
@@ -824,7 +824,7 @@ function drawTableFrame(ctx) {
     ctx.fillStyle = rg_s; ctx.fillRect(800-FW, 0, FW, 400);
 
     // ── 2. Banda de cushion (goma verde entre madera y paño) ─────────────────
-    const CR = 6;           // grosor del cushion
+    const CR = 9;           // grosor del cushion
     const cx = FW - CR;     // empieza justo dentro del marco
     ctx.fillStyle = '#12502a';
     ctx.fillRect(cx, cx, 800-cx*2, 400-cx*2);
@@ -886,8 +886,10 @@ function drawTableFrame(ctx) {
     const iW = 800-FW*2, iH = 400-FW*2;
     const xD = [FW+iW*0.25, FW+iW*0.5, FW+iW*0.75];
     const yD = [FW+iH/3, FW+iH*2/3];
-    const dmCY = cx + CR*0.5, dmCYb = 400-cx-CR*0.5;
-    const dmCX = cx + CR*0.5, dmCXr = 800-cx-CR*0.5;
+    // Diamantes en el centro de la banda de madera (cx/2 desde el borde)
+    const woodCtr = cx * 0.5;
+    const dmCY  = woodCtr,          dmCYb = 400 - woodCtr;
+    const dmCX  = woodCtr,          dmCXr = 800 - woodCtr;
     for (const x of xD) { drawDiamond(ctx,x,dmCY); drawDiamond(ctx,x,dmCYb); }
     for (const y of yD) { drawDiamond(ctx,dmCX,y); drawDiamond(ctx,dmCXr,y); }
 }
