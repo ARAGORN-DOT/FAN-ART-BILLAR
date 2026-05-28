@@ -794,13 +794,13 @@ const render = Render.create({
 });
 
 const radius = 15;
-const ballBase = { restitution: 0.97, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
+const ballBase = { restitution: 0.94, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
 
 const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { visible: false } });
 const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { visible: false } });
 const ballRed    = Bodies.circle(600, 250, radius, { ...ballBase, label: 'red',    render: { visible: false } });
 
-const wO = { isStatic: true, restitution: 1, friction: 0, frictionStatic: 0, render: { visible: false } };
+const wO = { isStatic: true, restitution: 0.87, friction: 0, frictionStatic: 0, render: { visible: false } };
 Composite.add(engine.world, [
     ballWhite, ballYellow, ballRed,
     Bodies.rectangle(400,  15, 800,  30, wO),
@@ -861,34 +861,31 @@ Events.on(engine, 'collisionStart', (event) => {
     const [tA, tB] = getTargets();
 
     for (const { bodyA, bodyB } of event.pairs) {
-        // Count wall (banda) hits for the cue ball (9y1 mode)
-        if (cfg.gameMode === '9y1') {
-            const other = bodyA === cue ? bodyB : bodyA === cue ? bodyA : null;
-            if ((bodyA === cue || bodyB === cue) &&
-                (bodyA.isStatic || bodyB.isStatic)) {
-                wallHitsThisShot++;
-                updateBanksIndicator();
-            }
+        // 9y1: contar bandas (cue toca pared estática)
+        if (cfg.gameMode === '9y1' &&
+            (bodyA === cue || bodyB === cue) &&
+            (bodyA.isStatic || bodyB.isStatic)) {
+            wallHitsThisShot++;
+            updateBanksIndicator();
         }
 
+        // Solo pares en los que participa la bola en juego
         if (bodyA !== cue && bodyB !== cue) continue;
         const target = bodyA === cue ? bodyB : bodyA;
-        if (target !== tA && target !== tB) continue;
-        const cv = prevVel[cue.id];
-        if (!cv) continue;
-        const dot = cv.x * (target.position.x - cue.position.x) +
-                    cv.y * (target.position.y - cue.position.y);
-        if (dot <= 0) continue;
 
+        // Regla simple: cualquier contacto físico con bola objetivo cuenta
         if (target === tA) hitA = true;
         if (target === tB) hitB = true;
 
-        // Queue spin effect: applied in afterUpdate after collision impulses resolve
-        if (shotInfo && cv) {
-            const preSpd = Math.hypot(cv.x, cv.y);
-            const dv = shotInfo.sy * preSpd * SPIN_EFFECT;
-            if (Math.abs(dv) > 0.05)
-                spinEffectQueue.push({ cue, dx: shotInfo.dirX * dv, dy: shotInfo.dirY * dv });
+        // Efecto de taco (seguir/retroceder) en colisión bola-bola
+        if ((target === tA || target === tB) && shotInfo) {
+            const cv = prevVel[cue.id];
+            if (cv) {
+                const preSpd = Math.hypot(cv.x, cv.y);
+                const dv = shotInfo.sy * preSpd * SPIN_EFFECT;
+                if (Math.abs(dv) > 0.05)
+                    spinEffectQueue.push({ cue, dx: shotInfo.dirX * dv, dy: shotInfo.dirY * dv });
+            }
         }
     }
 });
