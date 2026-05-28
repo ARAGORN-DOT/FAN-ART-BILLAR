@@ -326,6 +326,92 @@
             .p-card { padding: 8px 14px; min-width: 90px; }
             .p-value { font-size: 22px; }
         }
+
+        /* ══ LANDSCAPE PHONE ════════════════════════════════════════════════ */
+        @media (orientation: landscape) and (max-height: 500px) {
+            body { padding: 4px 6px; gap: 4px; justify-content: flex-start; }
+            #scoreboard { flex-direction: row; gap: 8px; margin-bottom: 4px; }
+            .p-card { padding: 6px 14px; min-width: 80px; }
+            .p-value { font-size: 20px; }
+            #target-display { font-size: 8px; margin-bottom: 4px; }
+            #banks-indicator { margin-bottom: 4px; }
+            #game-row { flex-direction: row; align-items: flex-start; gap: 10px; }
+            canvas { width: auto !important; height: calc(100vh - 110px) !important; }
+            #spin-widget { flex-direction: column; min-width: 70px; gap: 8px; }
+            #spin-zone { width: 62px !important; height: 62px !important; }
+            #mobile-controls { margin-top: 6px; gap: 14px; padding: 10px 14px; }
+            #mc-joystick { width: 82px; height: 82px; }
+            #mc-power-wrap { height: 82px; }
+            #mc-shoot-btn { width: 66px; height: 66px; font-size: 11px; }
+        }
+
+        /* ══ MOBILE CONTROLS ════════════════════════════════════════════════ */
+        #mobile-controls {
+            display: none;
+            flex-direction: row; align-items: center; justify-content: center;
+            gap: 22px; padding: 12px 22px;
+            background: rgba(0,0,0,0.32);
+            border-radius: 14px; margin-top: 8px;
+        }
+        .mc-section { display:flex; flex-direction:column; align-items:center; gap:7px; }
+        .mc-label {
+            font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+            color: rgba(255,255,255,0.28);
+        }
+        #mc-joystick {
+            width: 110px; height: 110px; border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.11), rgba(0,0,0,0.38));
+            border: 2px solid rgba(255,255,255,0.18);
+            box-shadow: inset 0 2px 8px rgba(255,255,255,0.05), 0 4px 18px rgba(0,0,0,0.4);
+            position: relative; touch-action: none; cursor: crosshair; overflow: hidden;
+        }
+        #mc-joystick-arrow {
+            position: absolute; top: 50%; left: 50%;
+            width: 42px; height: 3px; border-radius: 2px;
+            background: rgba(255,255,255,0.82);
+            transform-origin: 0 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            pointer-events: none;
+        }
+        #mc-joystick-arrow::after {
+            content: '';
+            position: absolute; right: -10px; top: -5.5px;
+            border-left: 12px solid rgba(255,255,255,0.82);
+            border-top: 6.5px solid transparent;
+            border-bottom: 6.5px solid transparent;
+        }
+        #mc-joystick-dot {
+            position: absolute; width: 20px; height: 20px; border-radius: 50%;
+            background: rgba(255,255,255,0.72);
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+            transform: translate(-50%, -50%);
+            top: 50%; left: 50%;
+            pointer-events: none;
+        }
+        #mc-shoot-btn {
+            width: 80px; height: 80px; border-radius: 50%;
+            font-size: 13px; font-weight: 900; letter-spacing: 1.5px;
+            text-transform: uppercase; color: #fff;
+            background: radial-gradient(circle at 40% 35%, #e74c3c, #b52519);
+            border: 3px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 16px rgba(200,30,30,0.55), inset 0 1px 0 rgba(255,255,255,0.18);
+            cursor: pointer; transition: transform .1s, box-shadow .1s;
+            touch-action: manipulation;
+        }
+        #mc-shoot-btn:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(200,30,30,0.4); }
+        #mc-shoot-btn:disabled { opacity: 0.35; transform: none; }
+        #mc-power-wrap {
+            width: 34px; height: 110px;
+            background: rgba(0,0,0,0.48);
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: 6px; overflow: hidden;
+            position: relative; touch-action: none; cursor: pointer;
+        }
+        #mc-power-fill {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            height: 55%;
+            background: linear-gradient(to top, #e74c3c 0%, #f39c12 55%, #2ecc71 100%);
+        }
     </style>
 
     <!-- Socket.io served by our Express server -->
@@ -528,6 +614,25 @@
             <div id="spin-name">Centro</div>
         </div>
     </div>
+
+    <!-- ══ MOBILE CONTROLS (visible on touch devices) ══ -->
+    <div id="mobile-controls">
+        <div class="mc-section">
+            <div class="mc-label">Dirección</div>
+            <div id="mc-joystick">
+                <div id="mc-joystick-arrow"></div>
+                <div id="mc-joystick-dot"></div>
+            </div>
+        </div>
+        <button id="mc-shoot-btn">TIRAR</button>
+        <div class="mc-section">
+            <div class="mc-label">Potencia</div>
+            <div id="mc-power-wrap">
+                <div id="mc-power-fill"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="message"></div>
 
 <script>
@@ -592,6 +697,11 @@ let hitA = false, hitB = false;
 
 // ══ Spin state ════════════════════════════════════════════════════════════
 let spinX = 0, spinY = 0;
+
+// ══ Mobile controls state ══════════════════════════════════════════════════
+const isMobileDev = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+let mobileShotAngle = -Math.PI / 2; // default: upward
+let mobilePower     = 0.55;         // 0‒1
 
 // ══ Spin state ════════════════════════════════════════════════════════════
 // shotInfo: set when a shot is fired, carries direction + spin values.
@@ -789,6 +899,7 @@ Events.on(engine, 'afterUpdate', () => {
         gs.currentPlayer = gs.currentPlayer === 1 ? 2 : 1;
         updateTurnUI();
     }
+    setSpinDot(0, 0);
     updateBanksIndicator();
 
     // ── Online: broadcast result to opponent ──
@@ -818,6 +929,7 @@ const cvs = render.canvas;
 // ── Pointer Events: handles mouse, touch, AND Apple Pencil / any stylus ──
 // setPointerCapture keeps tracking even when pointer leaves the canvas.
 cvs.addEventListener('pointerdown', (e) => {
+    if (isMobileDev) return; // mobile uses dedicated controls panel
     if (gs.phase !== 'playing' || pendingScoreEval) return;
     if (!isMyTurn()) return;
     if (ballWhite.speed > 0.1 || ballYellow.speed > 0.1 || ballRed.speed > 0.1) return;
@@ -1063,8 +1175,17 @@ Events.on(render, 'afterRender', () => {
     const [tA, tB] = getTargets();
     const cx = cb.position.x, cy = cb.position.y;
 
-    // Idle glow rings around balls
-    if (!isDragging && !pendingScoreEval && cb.speed < 0.12 && isMyTurn()) {
+    // Mobile: feed joystick direction into mPos so aim line tracks it each frame
+    let mobileAimOn = false;
+    if (isMobileDev && isMyTurn() && !pendingScoreEval && cb.speed < 0.12) {
+        mPos.x = cx - Math.cos(mobileShotAngle) * mobilePower * 300;
+        mPos.y = cy - Math.sin(mobileShotAngle) * mobilePower * 300;
+        mobileAimOn = true;
+    }
+    const aimActive = isDragging || mobileAimOn;
+
+    // Idle glow rings (desktop only — mobile always shows aim line)
+    if (!aimActive && !pendingScoreEval && cb.speed < 0.12 && isMyTurn()) {
         ctx.beginPath(); ctx.arc(cx,cy,radius+6,0,Math.PI*2);
         ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=2; ctx.stroke();
         for (const t of [tA,tB]) {
@@ -1073,7 +1194,7 @@ Events.on(render, 'afterRender', () => {
         }
     }
 
-    if (!isDragging) { lerpAX=null; lerpAY=null; return; }
+    if (!aimActive) { lerpAX=null; lerpAY=null; return; }
 
     // Smooth-lerp the aim position for fluid feel
     if (lerpAX===null) { lerpAX=mPos.x; lerpAY=mPos.y; }
@@ -1269,6 +1390,7 @@ function connectSocket() {
         pendingScoreEval = false;
         hasStartedMoving = false;
         hitA = hitB = false;
+        setSpinDot(0, 0);
         gs.scores = data.scores;
         document.getElementById('p1-score').textContent = data.scores[1];
         document.getElementById('p2-score').textContent = data.scores[2];
@@ -1493,6 +1615,87 @@ function powerColor(t) {
 
 function showOverlay(id)  { const o=document.getElementById(id); o.style.display='flex'; requestAnimationFrame(()=>requestAnimationFrame(()=>o.classList.remove('hidden'))); }
 function hideOverlay(id)  { const o=document.getElementById(id); o.classList.add('hidden'); setTimeout(()=>o.style.display='none',380); }
+
+// ══ Mobile controls ════════════════════════════════════════════════════════
+const mcJoystick  = document.getElementById('mc-joystick');
+const mcArrow     = document.getElementById('mc-joystick-arrow');
+const mcHandle    = document.getElementById('mc-joystick-dot');
+const mcPowerWrap = document.getElementById('mc-power-wrap');
+const mcPowerFill = document.getElementById('mc-power-fill');
+const mcShootBtn  = document.getElementById('mc-shoot-btn');
+
+if (isMobileDev) {
+    document.getElementById('mobile-controls').style.display = 'flex';
+}
+
+function mcRefreshArrow() {
+    const deg = mobileShotAngle * 180 / Math.PI;
+    mcArrow.style.transform = `translateY(-50%) rotate(${deg}deg)`;
+    const W = mcJoystick.offsetWidth  || 110;
+    const H = mcJoystick.offsetHeight || 110;
+    const R = W / 2 - 14;
+    mcHandle.style.left = (W / 2 + Math.cos(mobileShotAngle) * R) + 'px';
+    mcHandle.style.top  = (H / 2 + Math.sin(mobileShotAngle) * R) + 'px';
+}
+function mcRefreshPower() {
+    mcPowerFill.style.height = (mobilePower * 100) + '%';
+}
+
+mcJoystick.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    mcJoystick.setPointerCapture(e.pointerId);
+    mcHandleJoystick(e);
+});
+mcJoystick.addEventListener('pointermove', e => {
+    if (!e.buttons) return;
+    e.preventDefault();
+    mcHandleJoystick(e);
+});
+function mcHandleJoystick(e) {
+    const r = mcJoystick.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width  / 2);
+    const dy = e.clientY - (r.top  + r.height / 2);
+    if (Math.hypot(dx, dy) > 6) {
+        mobileShotAngle = Math.atan2(dy, dx);
+        mcRefreshArrow();
+    }
+}
+
+mcPowerWrap.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    mcPowerWrap.setPointerCapture(e.pointerId);
+    mcHandlePower(e);
+});
+mcPowerWrap.addEventListener('pointermove', e => {
+    if (!e.buttons) return;
+    e.preventDefault();
+    mcHandlePower(e);
+});
+function mcHandlePower(e) {
+    const r = mcPowerWrap.getBoundingClientRect();
+    mobilePower = Math.max(0.05, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+    mcRefreshPower();
+}
+
+mcShootBtn.addEventListener('click', () => {
+    if (gs.phase !== 'playing' || pendingScoreEval || !isMyTurn()) return;
+    if (ballWhite.speed > 0.1 || ballYellow.speed > 0.1 || ballRed.speed > 0.1) return;
+    const fx = Math.cos(mobileShotAngle) * MAX_FORCE * mobilePower;
+    const fy = Math.sin(mobileShotAngle) * MAX_FORCE * mobilePower;
+    const cb = getCueBall();
+    if (net.mode === 'online') {
+        net.socket.emit('shoot', {
+            startPos: currentPositions(),
+            force: { x: fx, y: fy },
+            spin:  { x: spinX, y: spinY },
+            cueLabel: cb.label
+        });
+    }
+    fireShot(cb, { x: fx, y: fy });
+});
+
+mcRefreshArrow();
+mcRefreshPower();
 
 // ── Waiting screen helpers ──
 function showWaiting(label, code, hint) {
