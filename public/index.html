@@ -126,7 +126,7 @@
         /* ── Mode selector (Libre / 9y1) ── */
         .mode-opts { display: flex; gap: 8px; }
         .mode-opt {
-            padding: 8px 18px; border-radius: 9px; border: 1.5px solid rgba(255,255,255,0.13);
+            padding: 8px 13px; border-radius: 9px; border: 1.5px solid rgba(255,255,255,0.13);
             background: transparent; color: rgba(255,255,255,0.45); font-size: 12px;
             font-weight: 700; letter-spacing: 1.5px; cursor: pointer; transition: all .15s;
             font-family: inherit;
@@ -552,8 +552,9 @@
                 </div>
                 <div class="modal-sub" style="margin-top:4px">Modo de juego</div>
                 <div class="mode-opts">
-                    <button class="mode-opt selected" data-mode="libre" onclick="selectMode('libre')">LIBRE</button>
-                    <button class="mode-opt"          data-mode="9y1"   onclick="selectMode('9y1')">9 Y 1</button>
+                    <button class="mode-opt selected" data-mode="libre"    onclick="selectMode('libre')">LIBRE</button>
+                    <button class="mode-opt"          data-mode="9y1"      onclick="selectMode('9y1')">9 Y 1</button>
+                    <button class="mode-opt"          data-mode="3bandas"  onclick="selectMode('3bandas')">3 BANDAS</button>
                 </div>
                 <button class="start-btn" id="p1-ready-btn" onclick="p1Confirm()">Confirmar</button>
             </div>
@@ -597,8 +598,9 @@
                 <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
                     <div class="modal-sub">Modo de juego</div>
                     <div class="mode-opts">
-                        <button class="mode-opt selected" data-mode="libre" onclick="selectMode('libre')">LIBRE</button>
-                        <button class="mode-opt"          data-mode="9y1"   onclick="selectMode('9y1')">9 Y 1</button>
+                        <button class="mode-opt selected" data-mode="libre"   onclick="selectMode('libre')">LIBRE</button>
+                        <button class="mode-opt"          data-mode="9y1"     onclick="selectMode('9y1')">9 Y 1</button>
+                        <button class="mode-opt"          data-mode="3bandas" onclick="selectMode('3bandas')">3 BANDAS</button>
                     </div>
                 </div>
                 <button class="start-btn" onclick="startLocalGame()">Comenzar partida</button>
@@ -728,6 +730,7 @@ function selectMode(m) {
 }
 
 function needs3Banks(playerScore) {
+    if (cfg.gameMode === '3bandas') return true;
     if (cfg.gameMode !== '9y1') return false;
     const next = playerScore + 1;
     return next % 10 === 0 || next === cfg.targetScore;
@@ -735,7 +738,7 @@ function needs3Banks(playerScore) {
 
 function updateBanksIndicator() {
     const ind = document.getElementById('banks-indicator');
-    if (cfg.gameMode !== '9y1') { ind.style.display = 'none'; return; }
+    if (cfg.gameMode !== '9y1' && cfg.gameMode !== '3bandas') { ind.style.display = 'none'; return; }
     const score = gs.scores[gs.currentPlayer] || 0;
     if (needs3Banks(score)) {
         ind.style.display = 'flex';
@@ -864,8 +867,8 @@ Events.on(engine, 'collisionStart', (event) => {
     const [tA, tB] = getTargets();
 
     for (const { bodyA, bodyB } of event.pairs) {
-        // 9y1: contar bandas (cue toca pared estática)
-        if (cfg.gameMode === '9y1' &&
+        // 9y1 / 3bandas: contar bandas (cue toca pared estática)
+        if ((cfg.gameMode === '9y1' || cfg.gameMode === '3bandas') &&
             (bodyA === cue || bodyB === cue) &&
             (bodyA.isStatic || bodyB.isStatic)) {
             wallHitsThisShot++;
@@ -882,7 +885,7 @@ Events.on(engine, 'collisionStart', (event) => {
 
         // 9y1: guardar el conteo de bandas al momento en que se completa la carambola
         // (es decir, cuando se toca la SEGUNDA bola objetivo por primera vez)
-        if (cfg.gameMode === '9y1' && hitA && hitB && wallHitsAtSecondBall < 0) {
+        if ((cfg.gameMode === '9y1' || cfg.gameMode === '3bandas') && hitA && hitB && wallHitsAtSecondBall < 0) {
             wallHitsAtSecondBall = wallHitsThisShot;
         }
 
@@ -1605,7 +1608,9 @@ function beginGame() {
     const p2Color = cfg.p2Ball === 'yellow' ? '#f1c40f' : '#e74c3c';
     document.getElementById('p2-dot').style.background = p2Color;
     document.getElementById('p2-card').style.color     = p2Color;
-    const modeLabel = cfg.gameMode === '9y1' ? '  |  MODO 9 Y 1' : '';
+    const modeLabel = cfg.gameMode === '9y1'     ? '  |  MODO 9 Y 1'
+                   : cfg.gameMode === '3bandas' ? '  |  MODO 3 BANDAS'
+                   : '';
     document.getElementById('target-display').textContent = `META: ${cfg.targetScore} CARAMBOLAS${modeLabel}`;
     document.getElementById('p1-score').textContent = '0';
     document.getElementById('p2-score').textContent = '0';
