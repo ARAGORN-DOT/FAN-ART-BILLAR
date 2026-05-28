@@ -327,22 +327,88 @@
             .p-value { font-size: 22px; }
         }
 
-        /* ══ LANDSCAPE PHONE ════════════════════════════════════════════════ */
+        /* ══ LANDSCAPE PHONE — canvas llena pantalla, UI flota encima ════════ */
         @media (orientation: landscape) and (max-height: 500px) {
-            body { padding: 4px 6px; gap: 4px; justify-content: flex-start; }
-            #scoreboard { flex-direction: row; gap: 8px; margin-bottom: 4px; }
-            .p-card { padding: 6px 14px; min-width: 80px; }
-            .p-value { font-size: 20px; }
-            #target-display { font-size: 8px; margin-bottom: 4px; }
-            #banks-indicator { margin-bottom: 4px; }
-            #game-row { flex-direction: row; align-items: flex-start; gap: 10px; }
-            canvas { width: auto !important; height: calc(100vh - 110px) !important; }
-            #spin-widget { flex-direction: column; min-width: 70px; gap: 8px; }
-            #spin-zone { width: 62px !important; height: 62px !important; }
-            #mobile-controls { margin-top: 6px; gap: 14px; padding: 10px 14px; }
-            #mc-joystick { width: 82px; height: 82px; }
-            #mc-power-wrap { height: 82px; }
-            #mc-shoot-btn { width: 66px; height: 66px; font-size: 11px; }
+            /* Body becomes a positioned container — no flex stacking */
+            body {
+                position: relative; padding: 0; gap: 0;
+                height: 100vh; height: 100dvh; overflow: hidden;
+            }
+
+            /* Game-row fills the whole viewport */
+            #game-row {
+                position: absolute; inset: 0; margin: 0;
+                display: flex; align-items: center; justify-content: center;
+            }
+            /* Canvas fills viewport height, width scales 2:1 automatically */
+            canvas {
+                height: 100vh !important; height: 100dvh !important;
+                width: auto !important;
+            }
+
+            /* Spin widget — floats on right edge */
+            #spin-widget {
+                position: absolute; right: 5px; top: 50%;
+                transform: translateY(-50%);
+                flex-direction: column; min-width: unset; gap: 5px;
+                background: rgba(5,12,22,0.78);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 10px; padding: 7px; z-index: 5;
+            }
+            #spin-zone { width: 58px !important; height: 58px !important; }
+            .sw-label { display: none; }
+            #spin-name { font-size: 7px; }
+
+            /* Scoreboard — floats top-center */
+            #scoreboard {
+                position: absolute; top: 4px;
+                left: 50%; transform: translateX(-50%);
+                flex-direction: row; gap: 6px; margin: 0; z-index: 10;
+            }
+            .p-card {
+                padding: 3px 10px; min-width: 70px;
+                background: rgba(8,16,28,0.84);
+                backdrop-filter: blur(6px);
+            }
+            .p-label { font-size: 7px; letter-spacing: 1.5px; }
+            .p-value { font-size: 18px; }
+            .p-name  { font-size: 7px; }
+            .p-turn  { height: 2px; }
+
+            /* Target & banks — float below scoreboard */
+            #target-display {
+                position: absolute; top: 50px;
+                left: 50%; transform: translateX(-50%);
+                font-size: 7px; margin: 0; white-space: nowrap;
+                background: rgba(8,16,28,0.7);
+                padding: 2px 8px; border-radius: 4px; z-index: 10;
+            }
+            #banks-indicator {
+                position: absolute; top: 66px;
+                left: 50%; transform: translateX(-50%); z-index: 10;
+            }
+
+            /* Mobile controls — float bottom-center */
+            #mobile-controls {
+                position: absolute; bottom: 4px;
+                left: 50%; transform: translateX(-50%);
+                flex-direction: row; gap: 12px;
+                padding: 5px 14px; margin: 0;
+                background: rgba(5,12,22,0.82);
+                backdrop-filter: blur(6px);
+                border: 1px solid rgba(255,255,255,0.1);
+                z-index: 10;
+            }
+            #mc-joystick { width: 68px; height: 68px; }
+            #mc-power-wrap { height: 68px; }
+            #mc-shoot-btn { width: 56px; height: 56px; font-size: 10px; }
+
+            /* Message toast — floats above controls */
+            #message {
+                position: absolute; bottom: 82px;
+                left: 50%; transform: translateX(-50%);
+                white-space: nowrap; font-size: 11px; z-index: 10;
+            }
         }
 
         /* ══ MOBILE CONTROLS ════════════════════════════════════════════════ */
