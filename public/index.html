@@ -718,7 +718,8 @@ const net = {
 const cfg = { p2Ball: 'yellow', targetScore: 10, gameMode: 'libre' };
 
 let _mode = 'libre'; // staging value for setup UI
-let wallHitsThisShot = 0;
+let wallHitsThisShot    = 0;
+let wallHitsAtSecondBall = -1; // bandas al momento de tocar la 2ª bola objetivo (-1 = aún no tocada)
 
 function selectMode(m) {
     _mode = m;
@@ -738,10 +739,12 @@ function updateBanksIndicator() {
     const score = gs.scores[gs.currentPlayer] || 0;
     if (needs3Banks(score)) {
         ind.style.display = 'flex';
+        // Durante el tiro: mostrar las bandas acumuladas hasta ahora
+        const count = pendingScoreEval ? wallHitsThisShot : 0;
         document.getElementById('banks-label').textContent =
-            pendingScoreEval ? `BANDAS: ${wallHitsThisShot}/3` : '3 BANDAS REQUERIDAS';
+            pendingScoreEval ? `BANDAS: ${count}/3` : '3 BANDAS ANTES DE 2ª BOLA';
         for (let i = 0; i < 3; i++)
-            document.getElementById(`pip${i}`).classList.toggle('lit', i < wallHitsThisShot);
+            document.getElementById(`pip${i}`).classList.toggle('lit', i < count);
     } else {
         ind.style.display = 'none';
     }
@@ -794,7 +797,7 @@ const render = Render.create({
 });
 
 const radius = 15;
-const ballBase = { restitution: 0.94, friction: 0, frictionStatic: 0, frictionAir: 0.011, density: 0.05 };
+const ballBase = { restitution: 0.96, friction: 0, frictionStatic: 0, frictionAir: 0.009, density: 0.05 };
 
 const ballWhite  = Bodies.circle(200, 200, radius, { ...ballBase, label: 'white',  render: { visible: false } });
 const ballYellow = Bodies.circle(600, 150, radius, { ...ballBase, label: 'yellow', render: { visible: false } });
@@ -873,9 +876,15 @@ Events.on(engine, 'collisionStart', (event) => {
         if (bodyA !== cue && bodyB !== cue) continue;
         const target = bodyA === cue ? bodyB : bodyA;
 
-        // Regla simple: cualquier contacto físico con bola objetivo cuenta
+        // Cualquier contacto físico con bola objetivo cuenta
         if (target === tA) hitA = true;
         if (target === tB) hitB = true;
+
+        // 9y1: guardar el conteo de bandas al momento en que se completa la carambola
+        // (es decir, cuando se toca la SEGUNDA bola objetivo por primera vez)
+        if (cfg.gameMode === '9y1' && hitA && hitB && wallHitsAtSecondBall < 0) {
+            wallHitsAtSecondBall = wallHitsThisShot;
+        }
 
         // Efecto de taco (seguir/retroceder) en colisión bola-bola
         if ((target === tA || target === tB) && shotInfo) {
@@ -942,9 +951,11 @@ Events.on(engine, 'afterUpdate', () => {
     pendingScoreEval = false;
     hasStartedMoving = false;
     const carambolaHit = hitA && hitB;
-    // 9y1: if 3 banks required, carom only counts if 3+ walls were touched
+    // 9y1: validar que las 3 bandas se tocaron ANTES de la segunda bola
     const bankRequired = needs3Banks(gs.scores[gs.currentPlayer]);
-    const scored = carambolaHit && (!bankRequired || wallHitsThisShot >= 3);
+    const bandasAntesDe2a = wallHitsAtSecondBall; // -1 si no hubo carambola
+    const banksOK = !bankRequired || (bandasAntesDe2a >= 3);
+    const scored = carambolaHit && banksOK;
     const scorer = scored ? gs.currentPlayer : null;
     hitA = hitB = false;
 
@@ -952,10 +963,10 @@ Events.on(engine, 'afterUpdate', () => {
         gs.scores[gs.currentPlayer]++;
         bumpScore(gs.currentPlayer);
         showMessage('¡ Carambola !', 'hit');
-        // currentPlayer stays the same (scored → same player continues)
     } else {
-        if (carambolaHit && bankRequired && wallHitsThisShot < 3) {
-            showMessage(`¡ Necesitas 3 bandas ! (${wallHitsThisShot}/3)`, 'miss');
+        if (carambolaHit && bankRequired && !banksOK) {
+            const got = Math.max(0, bandasAntesDe2a);
+            showMessage(`¡ ${got}/3 bandas antes de la 2ª bola !`, 'miss');
         } else {
             showMessage(`Fallo — turno del J${gs.currentPlayer === 1 ? 2 : 1}`, 'miss');
         }
@@ -1039,7 +1050,8 @@ function fireShot(cueBall, force) {
     hasStartedMoving = false;
     hitA = hitB = false;
     spinEffectQueue = [];
-    wallHitsThisShot = 0;
+    wallHitsThisShot    = 0;
+    wallHitsAtSecondBall = -1;
     updateBanksIndicator();
     const mag = Math.hypot(force.x, force.y);
     shotInfo = mag > 0
